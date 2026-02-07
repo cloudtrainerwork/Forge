@@ -2,11 +2,12 @@
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
+    "moduleResolution": "node",
+    "allowImportingTsExtensions": false,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": true,
     "jsx": "preserve",
 
     "strict": true,
@@ -32,6 +33,7 @@
     "declaration": true,
     "outDir": "dist",
     "rootDir": "src",
+    "noEmit": false,
 
     "skipLibCheck": true
   },

@@ -1,0 +1,350 @@
+import { Router, Request, Response, NextFunction } from 'express';
+import { v4 as uuidv4 } from 'uuid';
+import { ReadinessState, ReadinessDimension } from '../../domain/entities.js';
+import { WorkItemService } from '../../services/WorkItemService.js';
+import { ServiceFactory } from '../../factories/ServiceFactory.js';
+
+/**
+ * Work item routes with dependency injection for WorkItemService
+ * Provides REST API endpoints for work item operations with proper error handling
+ */
+export function workItemRoutes(serviceFactory: ServiceFactory): Router {
+  const router = Router();
+
+  /**
+   * GET /work-items - List work items with optional filtering
+   */
+  router.get('/', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const workItemService = serviceFactory.getService<WorkItemService>('WorkItemService');
+
+      const {
+        dimension,
+        value,
+        search,
+        limit = '50',
+        offset = '0'
+      } = req.query;
+
+      // Parse and validate query parameters
+      const parsedLimit = Math.min(parseInt(limit as string, 10) || 50, 100);
+      const parsedOffset = Math.max(parseInt(offset as string, 10) || 0, 0);
+
+      // Build filter options
+      const options: any = {
+        limit: parsedLimit,
+        offset: parsedOffset
+      };
+
+      if (search && typeof search === 'string') {
+        options.searchTerm = search.trim();
+      } else if (dimension && value) {
+        // Validate dimension and value
+        const validDimensions = ['requirements', 'design', 'frontend', 'backend', 'integration', 'test'];
+        const validValues = ['NOT_STARTED', 'IN_PROGRESS', 'COMPLETE'];
+
+        if (!validDimensions.includes(dimension as string)) {
+          return res.status(400).json({
+            error: 'Bad Request',
+            message: `Invalid dimension. Must be one of: ${validDimensions.join(', ')}`,
+            timestamp: new Date().toISOString()
+          });
+        }
+
+        if (!validValues.includes(value as string)) {
+          return res.status(400).json({
+            error: 'Bad Request',
+            message: `Invalid value. Must be one of: ${validValues.join(', ')}`,
+            timestamp: new Date().toISOString()
+          });
+        }
+
+        options.dimension = dimension as keyof ReadinessState;
+        options.value = value as ReadinessDimension;
+      }
+
+      const result = await workItemService.listWorkItems(options);
+
+      res.json({
+        data: result.items.map(item => item.toJSON()),
+        pagination: {
+          limit: parsedLimit,
+          offset: parsedOffset,
+          total: result.total,
+          hasMore: result.hasMore
+        },
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /work-items - Create a new work item
+   */
+  router.post('/', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const workItemService = serviceFactory.getService<WorkItemService>('WorkItemService');
+
+      const {
+        id = uuidv4(),
+        title,
+        description,
+        spec = {},
+        readiness
+      } = req.body;
+
+      // Validate required fields
+      if (!title || typeof title !== 'string' || title.trim().length === 0) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'Title is required and must be a non-empty string',
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      if (spec && typeof spec !== 'object') {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'Spec must be an object',
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      // Parse readiness if provided
+      let readinessState: ReadinessState | undefined;
+      if (readiness) {
+        try {
+          readinessState = ReadinessState.fromJSON(readiness);
+        } catch (error) {
+          return res.status(400).json({
+            error: 'Bad Request',
+            message: 'Invalid readiness state format',
+            timestamp: new Date().toISOString(),
+            details: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+      }
+
+      const workItem = await workItemService.createWorkItem(
+        id,
+        title.trim(),
+        spec || {},
+        description?.trim(),
+        readinessState
+      );
+
+      res.status(201).json({
+        data: workItem.toJSON(),
+        message: 'Work item created successfully',
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /work-items/:id - Get work item by ID
+   */
+  router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const workItemService = serviceFactory.getService<WorkItemService>('WorkItemService');
+      const { id } = req.params;
+
+      if (!id || typeof id !== 'string') {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'Work item ID is required',
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      const workItem = await workItemService.getWorkItem(id);
+
+      if (!workItem) {
+        return res.status(404).json({
+          error: 'Not Found',
+          message: `Work item with ID ${id} not found`,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      res.json({
+        data: workItem.toJSON(),
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PUT /work-items/:id/readiness - Update readiness dimension
+   */
+  router.put('/:id/readiness', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const workItemService = serviceFactory.getService<WorkItemService>('WorkItemService');
+      const { id } = req.params;
+      const { dimension, value } = req.body;
+
+      // Validate parameters
+      if (!id || typeof id !== 'string') {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'Work item ID is required',
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      const validDimensions = ['requirements', 'design', 'frontend', 'backend', 'integration', 'test'];
+      if (!dimension || !validDimensions.includes(dimension)) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: `Dimension is required and must be one of: ${validDimensions.join(', ')}`,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      const validValues = ['NOT_STARTED', 'IN_PROGRESS', 'COMPLETE'];
+      if (!value || !validValues.includes(value)) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: `Value is required and must be one of: ${validValues.join(', ')}`,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      const updatedWorkItem = await workItemService.updateReadiness(
+        id,
+        dimension as keyof ReadinessState,
+        value as ReadinessDimension
+      );
+
+      res.json({
+        data: updatedWorkItem.toJSON(),
+        message: 'Readiness updated successfully',
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /work-items/:id/dependencies - Create dependency relationship
+   */
+  router.post('/:id/dependencies', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const workItemService = serviceFactory.getService<WorkItemService>('WorkItemService');
+      const { id: fromWorkItemId } = req.params;
+      const { toWorkItemId, relationshipType = 'DEPENDS_ON', properties = {} } = req.body;
+
+      // Validate parameters
+      if (!fromWorkItemId || typeof fromWorkItemId !== 'string') {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'Source work item ID is required',
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      if (!toWorkItemId || typeof toWorkItemId !== 'string') {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'Target work item ID is required',
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      if (fromWorkItemId === toWorkItemId) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'Work item cannot depend on itself',
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      if (properties && typeof properties !== 'object') {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'Properties must be an object',
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      const relationshipId = await workItemService.createDependency(
+        fromWorkItemId,
+        toWorkItemId,
+        relationshipType,
+        properties || {}
+      );
+
+      res.status(201).json({
+        data: {
+          relationshipId,
+          fromWorkItemId,
+          toWorkItemId,
+          relationshipType,
+          properties
+        },
+        message: 'Dependency created successfully',
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /work-items/:id/dependencies - Get dependency graph
+   */
+  router.get('/:id/dependencies', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const workItemService = serviceFactory.getService<WorkItemService>('WorkItemService');
+      const { id } = req.params;
+      const {
+        relationshipType = 'DEPENDS_ON',
+        maxDepth = '5'
+      } = req.query;
+
+      // Validate parameters
+      if (!id || typeof id !== 'string') {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'Work item ID is required',
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      const parsedMaxDepth = Math.min(parseInt(maxDepth as string, 10) || 5, 10);
+
+      const dependencies = await workItemService.getDependencies(
+        id,
+        relationshipType as string,
+        parsedMaxDepth
+      );
+
+      res.json({
+        data: dependencies,
+        parameters: {
+          workItemId: id,
+          relationshipType,
+          maxDepth: parsedMaxDepth
+        },
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  return router;
+}
