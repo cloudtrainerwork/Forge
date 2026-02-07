@@ -3,33 +3,16 @@
 import { useEffect, useRef } from 'react';
 import cytoscape, { Core } from 'cytoscape';
 import { zoom, select } from 'd3';
-
-export interface WorkItemNode {
-  id: string;
-  label: string;
-  type: string;
-  readiness: {
-    requirements: boolean;
-    design: boolean;
-    frontend: boolean;
-    backend: boolean;
-    integration: boolean;
-    test: boolean;
-  };
-}
-
-export interface WorkItemEdge {
-  id: string;
-  source: string;
-  target: string;
-  type: 'blocks' | 'requires' | 'feeds-into' | 'tested-by' | 'deployed-with';
-  label?: string;
-}
+import { WorkItemNode, RelationshipEdge } from '../lib/graphTypes';
 
 interface GraphCanvasProps {
   nodes?: WorkItemNode[];
-  edges?: WorkItemEdge[];
+  edges?: RelationshipEdge[];
   onNodeSelect?: (nodeId: string) => void;
+  onCanvasClick?: (position: { x: number; y: number }) => void;
+  onNodeClick?: (nodeId: string) => void;
+  selectedNodeId?: string | null;
+  isCreatingEdge?: boolean;
   className?: string;
 }
 
@@ -57,10 +40,11 @@ const graphStyles: cytoscape.StylesheetStyle[] = [
       }
     },
     {
-      selector: 'node:selected',
+      selector: 'node:selected, node.selected',
       style: {
         'background-color': '#10b981',
-        'border-color': '#059669'
+        'border-color': '#059669',
+        'border-width': 3
       }
     },
     {
@@ -142,6 +126,10 @@ export default function GraphCanvas({
   nodes = [],
   edges = [],
   onNodeSelect,
+  onCanvasClick,
+  onNodeClick,
+  selectedNodeId,
+  isCreatingEdge = false,
   className = "w-full h-screen-safe"
 }: GraphCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -187,11 +175,23 @@ export default function GraphCanvas({
 
       container.call(zoomBehavior as never);
 
-      // Add node selection event handler
-      if (cyRef.current && onNodeSelect) {
+      // Add event handlers
+      if (cyRef.current) {
+        // Node click handler
         cyRef.current.on('tap', 'node', (evt) => {
           const nodeId = evt.target.id();
-          onNodeSelect(nodeId);
+          if (onNodeSelect) onNodeSelect(nodeId);
+          if (onNodeClick) onNodeClick(nodeId);
+        });
+
+        // Canvas click handler (empty space)
+        cyRef.current.on('tap', (evt) => {
+          if (evt.target === cyRef.current) {
+            const position = evt.position || evt.renderedPosition;
+            if (position && onCanvasClick) {
+              onCanvasClick({ x: position.x, y: position.y });
+            }
+          }
         });
       }
 
@@ -220,7 +220,23 @@ export default function GraphCanvas({
         cyRef.current = null;
       }
     };
-  }, [onNodeSelect]);
+  }, [onNodeSelect, onCanvasClick, onNodeClick]);
+
+  // Update selection state
+  useEffect(() => {
+    if (!cyRef.current) return;
+
+    // Clear all selections
+    cyRef.current.nodes().removeClass('selected');
+
+    // Apply selection to the selected node
+    if (selectedNodeId) {
+      const selectedNode = cyRef.current.getElementById(selectedNodeId);
+      if (selectedNode.length > 0) {
+        selectedNode.addClass('selected');
+      }
+    }
+  }, [selectedNodeId]);
 
   // Progressive loading pattern (Research Pattern 1) for 500+ nodes
   useEffect(() => {
