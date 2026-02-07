@@ -28,12 +28,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. PostgreSQL stores work item specifications and readiness history with JSONB querying
   3. Backend API maintains data synchronization between Neo4j and PostgreSQL stores
   4. System persists all user interactions and maintains audit trail of state changes
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: TBD
-- [ ] 01-02: TBD
-- [ ] 01-03: TBD
+- [ ] 01-01-PLAN.md — Docker infrastructure and TypeScript project setup
+- [ ] 01-02-PLAN.md — Data layer with Prisma schema and repositories
+- [ ] 01-03-PLAN.md — Service layer with API endpoints and data synchronization
 
 ### Phase 2: Graph Canvas
 **Goal**: Deliver interactive graph canvas with memory-safe rendering for large graphs and multi-device support
