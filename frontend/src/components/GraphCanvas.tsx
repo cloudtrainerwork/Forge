@@ -129,15 +129,19 @@ export default function GraphCanvas({
   onCanvasClick,
   onNodeClick,
   selectedNodeId,
-  isCreatingEdge = false,
+  isCreatingEdge: _ = false,
   className = "w-full h-screen-safe"
 }: GraphCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
+  const isDestroyedRef = useRef(false);
 
   // Initialize Cytoscape with WebGL rendering and memory-safe configuration
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!containerRef.current || isDestroyedRef.current) return;
+
+    // Reset destroyed flag for new mount
+    isDestroyedRef.current = false;
 
     try {
       // Initialize Cytoscape with memory-safe configuration per research
@@ -166,7 +170,7 @@ export default function GraphCanvas({
       const zoomBehavior = zoom()
         .scaleExtent([0.1, 3])
         .on('zoom', (event) => {
-          if (cyRef.current) {
+          if (cyRef.current && !isDestroyedRef.current) {
             const { transform } = event;
             cyRef.current.zoom(transform.k);
             cyRef.current.pan({ x: transform.x, y: transform.y });
@@ -203,7 +207,7 @@ export default function GraphCanvas({
     } catch (error) {
       console.error('GraphCanvas: Failed to initialize Cytoscape:', error);
       // Fallback to basic canvas rendering
-      if (containerRef.current) {
+      if (containerRef.current && !isDestroyedRef.current) {
         cyRef.current = cytoscape({
           container: containerRef.current,
           elements: [],
@@ -213,34 +217,64 @@ export default function GraphCanvas({
       }
     }
 
-    // Critical: Cleanup on component unmount to prevent memory leaks (Research Pitfall 1)
+    // Critical: Cleanup on component unmount to prevent memory leaks and DOM conflicts
     return () => {
-      if (cyRef.current) {
-        cyRef.current.destroy();
-        cyRef.current = null;
+      if (cyRef.current && !isDestroyedRef.current) {
+        isDestroyedRef.current = true;
+
+        // Remove all event listeners first to prevent callbacks during destruction
+        cyRef.current.removeAllListeners();
+
+        // Remove all elements before destroying to prevent DOM conflicts
+        try {
+          cyRef.current.elements().remove();
+        } catch {
+          // Ignore errors during cleanup
+        }
+
+        // Use setTimeout to ensure React has finished its DOM operations
+        setTimeout(() => {
+          if (cyRef.current && isDestroyedRef.current) {
+            try {
+              cyRef.current.destroy();
+            } catch (e) {
+              // Ignore destruction errors - component is unmounting anyway
+              console.warn('GraphCanvas: Cleanup warning (safe to ignore):', e);
+            } finally {
+              cyRef.current = null;
+            }
+          }
+        }, 0);
       }
     };
   }, [onNodeSelect, onCanvasClick, onNodeClick]);
 
   // Update selection state
   useEffect(() => {
-    if (!cyRef.current) return;
+    if (!cyRef.current || isDestroyedRef.current) return;
 
-    // Clear all selections
-    cyRef.current.nodes().removeClass('selected');
+    try {
+      // Clear all selections
+      cyRef.current.nodes().removeClass('selected');
 
-    // Apply selection to the selected node
-    if (selectedNodeId) {
-      const selectedNode = cyRef.current.getElementById(selectedNodeId);
-      if (selectedNode.length > 0) {
-        selectedNode.addClass('selected');
+      // Apply selection to the selected node
+      if (selectedNodeId) {
+        const selectedNode = cyRef.current.getElementById(selectedNodeId);
+        if (selectedNode.length > 0) {
+          selectedNode.addClass('selected');
+        }
+      }
+    } catch (e) {
+      // Ignore selection errors during component destruction
+      if (!isDestroyedRef.current) {
+        console.error('GraphCanvas: Error during selection update:', e);
       }
     }
   }, [selectedNodeId]);
 
   // Progressive loading pattern (Research Pattern 1) for 500+ nodes
   useEffect(() => {
-    if (!cyRef.current) return;
+    if (!cyRef.current || isDestroyedRef.current) return;
 
     // Convert nodes and edges to Cytoscape format
     const cytoscapeElements = [
@@ -267,30 +301,43 @@ export default function GraphCanvas({
     const batchSize = 100;
     const loadBatch = async (startIndex: number) => {
       const batch = cytoscapeElements.slice(startIndex, startIndex + batchSize);
-      if (batch.length > 0 && cyRef.current) {
-        cyRef.current.add(batch);
-        await new Promise(resolve => setTimeout(resolve, 16)); // Yield to browser
+      if (batch.length > 0 && cyRef.current && !isDestroyedRef.current) {
+        try {
+          cyRef.current.add(batch);
+          await new Promise(resolve => setTimeout(resolve, 16)); // Yield to browser
 
-        if (startIndex + batchSize < cytoscapeElements.length) {
-          await loadBatch(startIndex + batchSize);
-        } else {
-          // Layout after all elements are loaded
-          cyRef.current.layout({
-            name: 'breadthfirst',
-            directed: true,
-            padding: 50,
-            spacingFactor: 1.5,
-            animate: false // Disable animation for performance
-          }).run();
+          if (startIndex + batchSize < cytoscapeElements.length && !isDestroyedRef.current) {
+            await loadBatch(startIndex + batchSize);
+          } else if (cyRef.current && !isDestroyedRef.current) {
+            // Layout after all elements are loaded
+            cyRef.current.layout({
+              name: 'breadthfirst',
+              directed: true,
+              padding: 50,
+              spacingFactor: 1.5,
+              animate: false // Disable animation for performance
+            }).run();
+          }
+        } catch (e) {
+          // Component was destroyed during loading, stop gracefully
+          if (isDestroyedRef.current) return;
+          throw e;
         }
       }
     };
 
     // Clear existing elements and load new ones
-    cyRef.current.elements().remove();
+    try {
+      cyRef.current.elements().remove();
 
-    if (cytoscapeElements.length > 0) {
-      loadBatch(0);
+      if (cytoscapeElements.length > 0) {
+        loadBatch(0);
+      }
+    } catch (e) {
+      // Ignore errors if component is being destroyed
+      if (!isDestroyedRef.current) {
+        console.error('GraphCanvas: Error during progressive loading:', e);
+      }
     }
   }, [nodes, edges]);
 

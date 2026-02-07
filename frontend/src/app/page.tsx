@@ -5,7 +5,6 @@ import GraphCanvas from '@/components/GraphCanvas';
 import { NodeCreationPanel } from '@/components/NodeCreation';
 import { RelationshipPanel } from '@/components/RelationshipPanel';
 import {
-  WorkItemNode,
   RelationshipEdge,
   CreateNodeRequest,
   CreateRelationshipRequest,
@@ -320,7 +319,7 @@ export default function Home() {
         {/* Node Creation Panel */}
         <NodeCreationPanel
           isVisible={showNodeCreation}
-          position={nodeCreationPosition}
+          position={nodeCreationPosition || undefined}
           onCreateNode={handleCreateNode}
           onCancel={() => {
             setShowNodeCreation(false);
