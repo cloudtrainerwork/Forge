@@ -81,24 +81,24 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| GRAPH-01 | Phase 1 | Pending |
-| GRAPH-02 | Phase 1 | Pending |
-| GRAPH-03 | Phase 1 | Pending |
-| GRAPH-04 | Phase 1 | Pending |
-| GRAPH-05 | Phase 1 | Pending |
-| READ-01 | Phase 2 | Pending |
-| READ-02 | Phase 2 | Pending |
-| READ-03 | Phase 2 | Pending |
-| READ-04 | Phase 2 | Pending |
-| PM-01 | Phase 3 | Pending |
-| PM-02 | Phase 3 | Pending |
-| PM-03 | Phase 3 | Pending |
-| PM-04 | Phase 3 | Pending |
-| PM-05 | Phase 3 | Pending |
-| DATA-01 | Phase 4 | Pending |
-| DATA-02 | Phase 4 | Pending |
-| DATA-03 | Phase 4 | Pending |
-| DATA-04 | Phase 4 | Pending |
+| DATA-01 | Phase 1 | Pending |
+| DATA-02 | Phase 1 | Pending |
+| DATA-03 | Phase 1 | Pending |
+| DATA-04 | Phase 1 | Pending |
+| GRAPH-01 | Phase 2 | Pending |
+| GRAPH-02 | Phase 2 | Pending |
+| GRAPH-03 | Phase 2 | Pending |
+| GRAPH-04 | Phase 2 | Pending |
+| GRAPH-05 | Phase 2 | Pending |
+| READ-01 | Phase 3 | Pending |
+| READ-02 | Phase 3 | Pending |
+| READ-03 | Phase 3 | Pending |
+| READ-04 | Phase 3 | Pending |
+| PM-01 | Phase 4 | Pending |
+| PM-02 | Phase 4 | Pending |
+| PM-03 | Phase 4 | Pending |
+| PM-04 | Phase 4 | Pending |
+| PM-05 | Phase 4 | Pending |
 
 **Coverage:**
 - v1 requirements: 18 total
@@ -107,4 +107,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2025-02-07*
-*Last updated: 2025-02-07 after initial definition*
+*Last updated: 2025-02-07 after roadmap creation*
