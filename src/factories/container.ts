@@ -1,0 +1,2 @@
+// IoC container placeholder
+export {};
