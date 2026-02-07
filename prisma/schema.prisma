@@ -20,3 +20,35 @@ model HealthCheck {
 
   @@map("health_checks")
 }
+
+// Work item model with flexible JSONB spec and readiness tracking
+model WorkItem {
+  id          String   @id @default(cuid())
+  title       String?
+  description String?
+  spec        Json     @db.JsonB // Flexible work item specifications
+  readiness   Json     @db.JsonB // 6-dimensional readiness tracking
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("work_items")
+}
+
+// Audit log for complete traceability
+model AuditLog {
+  id        String        @id @default(cuid())
+  type      AuditLogType  // What kind of change happened
+  entityId  String        @map("entity_id") // ID of the affected entity
+  changes   Json          @db.JsonB // What changed (before/after, metadata)
+  timestamp DateTime      @default(now())
+
+  @@map("audit_logs")
+}
+
+enum AuditLogType {
+  WORK_ITEM_CREATED
+  WORK_ITEM_UPDATED
+  RELATIONSHIP_ADDED
+  RELATIONSHIP_REMOVED
+  READINESS_UPDATED
+}
