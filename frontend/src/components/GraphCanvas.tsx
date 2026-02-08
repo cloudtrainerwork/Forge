@@ -375,11 +375,17 @@ export default function GraphCanvas({
         setTimeout(() => {
           if (cyRef.current && isDestroyedRef.current) {
             try {
-              cyRef.current.destroy();
+              // Check if container still exists in DOM before destroying
+              const container = cyRef.current.container();
+              if (container && container.parentNode) {
+                cyRef.current.destroy();
+              } else {
+                // Container was removed by React, just clean up reference
+                cyRef.current = null;
+              }
             } catch (e) {
               // Ignore destruction errors - component is unmounting anyway
               console.warn('GraphCanvas: Cleanup warning (safe to ignore):', e);
-            } finally {
               cyRef.current = null;
             }
           }
