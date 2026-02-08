@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import GraphCanvas from '@/components/GraphCanvas';
+import GraphCanvasSimple from '@/components/GraphCanvasSimple';
 import GraphCanvasErrorBoundary from '@/components/GraphCanvasErrorBoundary';
 import { NodeCreationPanel } from '@/components/NodeCreation';
 import { RelationshipPanel } from '@/components/RelationshipPanel';
@@ -307,7 +307,7 @@ export default function Home() {
       {/* Main Canvas Area */}
       <main className="flex-1 p-4 relative">
         <GraphCanvasErrorBoundary>
-          <GraphCanvas
+          <GraphCanvasSimple
             nodes={graphState.nodes}
             edges={graphState.edges}
             onNodeSelect={handleNodeSelect}

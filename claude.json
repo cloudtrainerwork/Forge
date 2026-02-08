@@ -1,0 +1,9 @@
+{
+  "name": "forge",
+  "description": "Forge project workspace",
+  "version": "1.0.0",
+  "settings": {
+    "language": "auto",
+    "framework": "auto"
+  }
+}
