@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import GraphCanvas from '@/components/GraphCanvas';
+import GraphCanvasErrorBoundary from '@/components/GraphCanvasErrorBoundary';
 import { NodeCreationPanel } from '@/components/NodeCreation';
 import { RelationshipPanel } from '@/components/RelationshipPanel';
 import {
@@ -305,16 +306,18 @@ export default function Home() {
 
       {/* Main Canvas Area */}
       <main className="flex-1 p-4 relative">
-        <GraphCanvas
-          nodes={graphState.nodes}
-          edges={graphState.edges}
-          onNodeSelect={handleNodeSelect}
-          onCanvasClick={handleCanvasClick}
-          onNodeClick={handleNodeClick}
-          selectedNodeId={graphState.selectedNodeId}
-          isCreatingEdge={graphState.isCreatingEdge}
-          className="w-full h-full"
-        />
+        <GraphCanvasErrorBoundary>
+          <GraphCanvas
+            nodes={graphState.nodes}
+            edges={graphState.edges}
+            onNodeSelect={handleNodeSelect}
+            onCanvasClick={handleCanvasClick}
+            onNodeClick={handleNodeClick}
+            selectedNodeId={graphState.selectedNodeId}
+            isCreatingEdge={graphState.isCreatingEdge}
+            className="w-full h-full"
+          />
+        </GraphCanvasErrorBoundary>
 
         {/* Node Creation Panel */}
         <NodeCreationPanel

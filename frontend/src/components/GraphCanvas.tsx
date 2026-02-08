@@ -361,35 +361,21 @@ export default function GraphCanvas({
           memoryCheckIntervalRef.current = null;
         }
 
-        // Remove all event listeners first to prevent callbacks during destruction
-        cyRef.current.removeAllListeners();
-
-        // Remove all elements before destroying to prevent DOM conflicts
+        // Aggressive cleanup to prevent React DOM conflicts
         try {
+          // Remove all event listeners first
+          cyRef.current.removeAllListeners();
+          // Clear all elements
           cyRef.current.elements().remove();
-        } catch {
-          // Ignore errors during cleanup
+          // Immediately destroy without waiting for timeouts
+          cyRef.current.destroy();
+        } catch (e) {
+          // Completely ignore all cleanup errors - let error boundary handle display
+          console.warn('GraphCanvas: Cleanup error (handled by error boundary):', e.message);
+        } finally {
+          // Always clear the reference
+          cyRef.current = null;
         }
-
-        // Use setTimeout to ensure React has finished its DOM operations
-        setTimeout(() => {
-          if (cyRef.current && isDestroyedRef.current) {
-            try {
-              // Check if container still exists in DOM before destroying
-              const container = cyRef.current.container();
-              if (container && container.parentNode) {
-                cyRef.current.destroy();
-              } else {
-                // Container was removed by React, just clean up reference
-                cyRef.current = null;
-              }
-            } catch (e) {
-              // Ignore destruction errors - component is unmounting anyway
-              console.warn('GraphCanvas: Cleanup warning (safe to ignore):', e);
-              cyRef.current = null;
-            }
-          }
-        }, 0);
       }
     };
   }, [onNodeSelect, onCanvasClick, onNodeClick, nodes.length, edges.length]);
