@@ -30,15 +30,13 @@ class GraphCanvasErrorBoundary extends Component<Props, State> {
     // Log error details for debugging
     console.error('GraphCanvas Error Boundary caught an error:', error, errorInfo);
 
-    // Check if it's the known DOM cleanup error
-    if (error.message.includes('removeChild') || error.message.includes('NotFoundError')) {
-      console.warn('Known Cytoscape DOM cleanup error - recovering...');
+    // Always auto-recover from any GraphCanvas error to prevent app crashes
+    console.warn('GraphCanvas error - auto-recovering...');
 
-      // Auto-recover after a short delay
-      setTimeout(() => {
-        this.setState({ hasError: false, error: null });
-      }, 100);
-    }
+    // Auto-recover immediately for better UX
+    setTimeout(() => {
+      this.setState({ hasError: false, error: null });
+    }, 50);
   }
 
   render() {
