@@ -288,8 +288,8 @@ export function transformWorkItemToNode(workItem: BackendWorkItem): {
 export async function checkApiHealth(): Promise<boolean> {
   try {
     // Try a simple request to check if backend is running
-    await fetch(`${API_BASE_URL}/api/v1/work-items?limit=1`);
-    return true;
+    const response = await fetch(`${API_BASE_URL}/api/v1/work-items?limit=1`);
+    return response.ok; // Check if status is 2xx
   } catch {
     return false;
   }
