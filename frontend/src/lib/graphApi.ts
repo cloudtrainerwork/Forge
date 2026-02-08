@@ -67,10 +67,10 @@ export interface DependencyResponse {
 // API configuration
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const API_ENDPOINTS = {
-  workItems: '/api/work-items',
-  workItem: (id: string) => `/api/work-items/${id}`,
-  readiness: (id: string) => `/api/work-items/${id}/readiness`,
-  dependencies: (id: string) => `/api/work-items/${id}/dependencies`,
+  workItems: '/api/v1/work-items',
+  workItem: (id: string) => `/api/v1/work-items/${id}`,
+  readiness: (id: string) => `/api/v1/work-items/${id}/readiness`,
+  dependencies: (id: string) => `/api/v1/work-items/${id}/dependencies`,
 } as const;
 
 // Error classes for proper error handling
@@ -288,7 +288,7 @@ export function transformWorkItemToNode(workItem: BackendWorkItem): {
 export async function checkApiHealth(): Promise<boolean> {
   try {
     // Try a simple request to check if backend is running
-    await fetch(`${API_BASE_URL}/api/work-items?limit=1`);
+    await fetch(`${API_BASE_URL}/api/v1/work-items?limit=1`);
     return true;
   } catch {
     return false;
