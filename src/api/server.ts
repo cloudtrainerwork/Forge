@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { workItemRoutes } from './routes/workItems.js';
+import { readinessRoutes } from './routes/readiness.js';
 import { ServiceFactory } from '../factories/ServiceFactory.js';
 
 /**
@@ -66,6 +67,12 @@ export class ApiServer {
     // Work item routes with service injection
     apiRouter.use('/work-items', workItemRoutes(this.serviceFactory));
 
+    // Readiness routes with service injection
+    apiRouter.use('/readiness', readinessRoutes(this.serviceFactory));
+
+    // Mount readiness routes directly for convenience
+    apiRouter.use('/', readinessRoutes(this.serviceFactory));
+
     // Mount API router
     this.app.use('/api/v1', apiRouter);
 
@@ -77,7 +84,8 @@ export class ApiServer {
         status: 'running',
         endpoints: {
           health: '/health',
-          workItems: '/api/v1/work-items'
+          workItems: '/api/v1/work-items',
+          readiness: '/api/v1/readiness'
         }
       });
     });

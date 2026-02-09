@@ -2,8 +2,10 @@ import { Container } from 'inversify';
 import { PrismaClient } from '@prisma/client';
 import { Driver } from 'neo4j-driver';
 import { WorkItemRepository } from '../infrastructure/postgresql/WorkItemRepository.js';
+import { ReadinessRepository } from '../infrastructure/postgresql/ReadinessRepository.js';
 import { GraphRepository } from '../infrastructure/neo4j/GraphRepository.js';
 import { WorkItemService } from '../services/WorkItemService.js';
+import { ReadinessService } from '../services/ReadinessService.js';
 import { AuditTrailService } from '../services/AuditTrailService.js';
 import type { IWorkItemRepository } from '../adapters/IWorkItemRepository.js';
 import type { IGraphRepository } from '../adapters/IGraphRepository.js';
@@ -41,6 +43,13 @@ export class ServiceFactory {
       })
       .inSingletonScope();
 
+    this.container.bind<ReadinessRepository>('ReadinessRepository')
+      .toDynamicValue((context) => {
+        const prisma = context.container.get<PrismaClient>('PrismaClient');
+        return new ReadinessRepository(prisma);
+      })
+      .inSingletonScope();
+
     this.container.bind<IGraphRepository>('IGraphRepository')
       .toDynamicValue((context) => {
         const driver = context.container.get<Driver>('Neo4jDriver');
@@ -55,6 +64,10 @@ export class ServiceFactory {
 
     this.container.bind<WorkItemService>('WorkItemService')
       .to(WorkItemService)
+      .inSingletonScope();
+
+    this.container.bind<ReadinessService>('ReadinessService')
+      .to(ReadinessService)
       .inSingletonScope();
 
     this.isConfigured = true;
@@ -102,13 +115,22 @@ export class ServiceFactory {
   }
 
   /**
+   * Get ReadinessService instance
+   */
+  getReadinessService(): ReadinessService {
+    return this.getService<ReadinessService>('ReadinessService');
+  }
+
+  /**
    * Health check - verify all critical services can be resolved
    */
   async healthCheck(): Promise<{
     container: boolean;
     workItemRepository: boolean;
     graphRepository: boolean;
+    readinessRepository: boolean;
     workItemService: boolean;
+    readinessService: boolean;
     auditTrailService: boolean;
     overall: boolean;
   }> {
@@ -116,7 +138,9 @@ export class ServiceFactory {
       container: false,
       workItemRepository: false,
       graphRepository: false,
+      readinessRepository: false,
       workItemService: false,
+      readinessService: false,
       auditTrailService: false,
       overall: false
     };
@@ -135,10 +159,16 @@ export class ServiceFactory {
       const graphRepo = this.getService<IGraphRepository>('IGraphRepository');
       result.graphRepository = await graphRepo.healthCheck();
 
+      const readinessRepo = this.getService<ReadinessRepository>('ReadinessRepository');
+      result.readinessRepository = await readinessRepo.healthCheck();
+
       // Test service resolution
       const workItemService = this.getService<WorkItemService>('WorkItemService');
       const serviceHealth = await workItemService.healthCheck();
       result.workItemService = serviceHealth.overall;
+
+      const readinessService = this.getService<ReadinessService>('ReadinessService');
+      result.readinessService = true; // ReadinessService doesn't have healthCheck method
 
       const auditService = this.getService<AuditTrailService>('AuditTrailService');
       result.auditTrailService = await auditService.healthCheck();
@@ -146,7 +176,9 @@ export class ServiceFactory {
       result.overall = result.container &&
                       result.workItemRepository &&
                       result.graphRepository &&
+                      result.readinessRepository &&
                       result.workItemService &&
+                      result.readinessService &&
                       result.auditTrailService;
 
     } catch (error) {
