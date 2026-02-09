@@ -1,6 +1,17 @@
-import { IsString, IsOptional, IsObject, IsNotEmpty, validateOrReject } from 'class-validator';
+import { IsString, IsOptional, IsObject, IsNotEmpty, IsEnum, validateOrReject } from 'class-validator';
 import { Expose, Transform, Type } from 'class-transformer';
 import { ReadinessState, ReadinessDimension } from './ReadinessState.js';
+
+export enum DeliverableType {
+  SCREEN = 'screen',
+  SERVICE = 'service',
+  DTO = 'dto',
+  TEST = 'test',
+  COMPONENT = 'component',
+  API = 'api',
+  DATABASE = 'database',
+  DOCUMENTATION = 'documentation'
+}
 
 /**
  * WorkItem domain entity represents a unit of work with flexible specifications
@@ -32,6 +43,26 @@ export class WorkItem {
   @Expose()
   readiness: ReadinessState;
 
+  @IsString()
+  @IsOptional()
+  @Expose()
+  groupId?: string; // Screen group this work item belongs to
+
+  @IsString()
+  @IsOptional()
+  @Expose()
+  sprintId?: string; // Sprint this work item is assigned to
+
+  @IsString()
+  @IsOptional()
+  @Expose()
+  parentId?: string; // Parent work item for hierarchical relationships
+
+  @IsEnum(DeliverableType)
+  @IsOptional()
+  @Expose()
+  deliverableType?: DeliverableType; // Type of deliverable this work item represents
+
   @Expose()
   @Transform(({ value }) => value instanceof Date ? value : new Date(value))
   createdAt: Date;
@@ -46,6 +77,10 @@ export class WorkItem {
     title?: string,
     description?: string,
     readiness?: ReadinessState,
+    groupId?: string,
+    sprintId?: string,
+    parentId?: string,
+    deliverableType?: DeliverableType,
     createdAt?: Date,
     updatedAt?: Date
   ) {
@@ -54,6 +89,10 @@ export class WorkItem {
     this.description = description;
     this.spec = spec || {};
     this.readiness = readiness || new ReadinessState();
+    this.groupId = groupId;
+    this.sprintId = sprintId;
+    this.parentId = parentId;
+    this.deliverableType = deliverableType;
     this.createdAt = createdAt || new Date();
     this.updatedAt = updatedAt || new Date();
   }
@@ -108,6 +147,10 @@ export class WorkItem {
       this.title,
       this.description,
       updatedReadiness,
+      this.groupId,
+      this.sprintId,
+      this.parentId,
+      this.deliverableType,
       this.createdAt,
       new Date() // Update timestamp
     );
@@ -124,6 +167,10 @@ export class WorkItem {
       this.title,
       this.description,
       this.readiness,
+      this.groupId,
+      this.sprintId,
+      this.parentId,
+      this.deliverableType,
       this.createdAt,
       new Date() // Update timestamp
     );
@@ -140,9 +187,66 @@ export class WorkItem {
       title ?? this.title,
       description ?? this.description,
       this.readiness,
+      this.groupId,
+      this.sprintId,
+      this.parentId,
+      this.deliverableType,
       this.createdAt,
       new Date() // Update timestamp
     );
+  }
+
+  /**
+   * Update grouping and sprint assignment
+   * Returns new instance to maintain immutability
+   */
+  updateAssignments(
+    groupId?: string,
+    sprintId?: string,
+    parentId?: string,
+    deliverableType?: DeliverableType
+  ): WorkItem {
+    return new WorkItem(
+      this.id,
+      this.spec,
+      this.title,
+      this.description,
+      this.readiness,
+      groupId ?? this.groupId,
+      sprintId ?? this.sprintId,
+      parentId ?? this.parentId,
+      deliverableType ?? this.deliverableType,
+      this.createdAt,
+      new Date() // Update timestamp
+    );
+  }
+
+  /**
+   * Check if work item is assigned to a group
+   */
+  isGrouped(): boolean {
+    return !!this.groupId;
+  }
+
+  /**
+   * Check if work item is assigned to a sprint
+   */
+  isScheduled(): boolean {
+    return !!this.sprintId;
+  }
+
+  /**
+   * Check if work item has a parent (is a child item)
+   */
+  isChildItem(): boolean {
+    return !!this.parentId;
+  }
+
+  /**
+   * Get deliverable type or default to component
+   */
+  getDeliverableType(): DeliverableType {
+    return this.deliverableType || DeliverableType.COMPONENT;
   }
 
   /**
@@ -155,6 +259,10 @@ export class WorkItem {
       description: this.description,
       spec: this.spec,
       readiness: this.readiness.toJSON(),
+      groupId: this.groupId,
+      sprintId: this.sprintId,
+      parentId: this.parentId,
+      deliverableType: this.deliverableType,
       createdAt: this.createdAt.toISOString(),
       updatedAt: this.updatedAt.toISOString(),
     };
@@ -170,6 +278,10 @@ export class WorkItem {
       data.title,
       data.description,
       ReadinessState.fromJSON(data.readiness),
+      data.groupId,
+      data.sprintId,
+      data.parentId,
+      data.deliverableType,
       new Date(data.createdAt),
       new Date(data.updatedAt)
     );
@@ -182,9 +294,10 @@ export class WorkItem {
     id: string,
     title: string,
     spec: Record<string, any> = {},
-    description?: string
+    description?: string,
+    deliverableType?: DeliverableType
   ): WorkItem {
-    return new WorkItem(id, spec, title, description);
+    return new WorkItem(id, spec, title, description, undefined, undefined, undefined, undefined, deliverableType);
   }
 
   /**
