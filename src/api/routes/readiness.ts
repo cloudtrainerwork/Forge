@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { container } from '../../factories/container.js';
 import { ReadinessController } from '../../controllers/ReadinessController.js';
 import { ServiceFactory } from '../../factories/ServiceFactory.js';
+import { createReadinessValidationMiddleware } from '../../middleware/ReadinessValidationMiddleware.js';
 
 /**
  * Validation middleware for readiness operations
@@ -78,13 +79,15 @@ const handleReadinessErrors = (error: any, req: any, res: any, next: any) => {
 export function readinessRoutes(serviceFactory: ServiceFactory): Router {
   const router = Router();
 
-  // Get controller instance from service factory
+  // Get controller and validation middleware from service factory
+  const readinessService = serviceFactory.getReadinessService();
+  const validationMiddleware = createReadinessValidationMiddleware(readinessService);
+
   const getController = (): ReadinessController => {
     try {
       return container.get<ReadinessController>('ReadinessController');
     } catch {
       // Fallback: create controller directly with service factory
-      const readinessService = serviceFactory.getReadinessService();
       return new ReadinessController(readinessService as any);
     }
   };
@@ -168,14 +171,19 @@ export function readinessRoutes(serviceFactory: ServiceFactory): Router {
    *       500:
    *         $ref: '#/components/responses/InternalError'
    */
-  router.put('/work-items/:id/readiness', validateStateTransition, async (req, res) => {
-    try {
-      const controller = getController();
-      await controller.updateReadiness(req, res);
-    } catch (error) {
-      handleReadinessErrors(error, req, res, null);
+  router.put('/work-items/:id/readiness',
+    validationMiddleware.validatePercentageUpdate,
+    validationMiddleware.validateStateTransition,
+    validationMiddleware.logReadinessChange,
+    async (req, res) => {
+      try {
+        const controller = getController();
+        await controller.updateReadiness(req, res);
+      } catch (error) {
+        handleReadinessErrors(error, req, res, null);
+      }
     }
-  });
+  );
 
   /**
    * @openapi
@@ -234,14 +242,18 @@ export function readinessRoutes(serviceFactory: ServiceFactory): Router {
    *       500:
    *         $ref: '#/components/responses/InternalError'
    */
-  router.put('/work-items/readiness/bulk', validateStateTransition, async (req, res) => {
-    try {
-      const controller = getController();
-      await controller.bulkUpdateReadiness(req, res);
-    } catch (error) {
-      handleReadinessErrors(error, req, res, null);
+  router.put('/work-items/readiness/bulk',
+    validationMiddleware.validateBulkOperation,
+    validationMiddleware.logReadinessChange,
+    async (req, res) => {
+      try {
+        const controller = getController();
+        await controller.bulkUpdateReadiness(req, res);
+      } catch (error) {
+        handleReadinessErrors(error, req, res, null);
+      }
     }
-  });
+  );
 
   /**
    * @openapi
