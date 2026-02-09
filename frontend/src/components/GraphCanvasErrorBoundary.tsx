@@ -28,10 +28,7 @@ class GraphCanvasErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     // Log error details for debugging
-    console.error('GraphCanvas Error Boundary caught an error:', error, errorInfo);
-
-    // Always auto-recover from any GraphCanvas error to prevent app crashes
-    console.warn('GraphCanvas error - auto-recovering...');
+    // GraphCanvas Error Boundary caught an error - auto-recovering
 
     // Auto-recover immediately for better UX
     setTimeout(() => {

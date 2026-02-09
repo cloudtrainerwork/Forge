@@ -1,5 +1,5 @@
 import { IsString, IsArray, IsOptional, IsNotEmpty, IsBoolean, IsObject, validateOrReject } from 'class-validator';
-import { Expose, Transform, Type } from 'class-transformer';
+import { Expose, Transform } from 'class-transformer';
 
 /**
  * ScreenGroup domain entity represents a logical grouping of work items

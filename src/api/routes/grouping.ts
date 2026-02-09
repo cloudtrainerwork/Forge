@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { container } from '../../factories/container.js';
-import { GroupingService, ComponentBreakdownResult } from '../../services/GroupingService.js';
+import { GroupingService } from '../../services/GroupingService.js';
 import { ScreenGroup } from '../../domain/entities/ScreenGroup.js';
 import { WorkItem } from '../../domain/entities/WorkItem.js';
 

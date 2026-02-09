@@ -1,269 +1,76 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import GraphCanvasSimple from '@/components/GraphCanvasSimple';
-import GraphCanvasErrorBoundary from '@/components/GraphCanvasErrorBoundary';
-import { NodeCreationPanel } from '@/components/NodeCreation';
-import { RelationshipPanel } from '@/components/RelationshipPanel';
-import {
-  RelationshipEdge,
-  CreateNodeRequest,
-  CreateRelationshipRequest,
-} from '@/lib/graphTypes';
-import {
-  fetchWorkItems,
-  transformWorkItemToNode,
-  checkApiHealth,
-  createWorkItem,
-  createDependency,
-  ApiError,
-  NetworkError
-} from '@/lib/graphApi';
-import { useNodeSelection } from '@/hooks/useGraphInteractions';
+import { useState } from 'react';
+import { checkApiHealth, fetchWorkItems, transformWorkItemToNode } from '@/lib/graphApi';
+
+// Simple types for debugging - extend to match API data
+interface GraphNode {
+  id: string;
+  label: string;
+  type: string;
+  readiness?: {
+    requirements: boolean;
+    design: boolean;
+    frontend: boolean;
+    backend: boolean;
+    integration: boolean;
+    test: boolean;
+  };
+}
 
 export default function Home() {
-  // Graph state management
-  const { state: graphState, actions: graphActions } = useNodeSelection();
+  // Simple state - no useEffect yet
+  const [nodes, setNodes] = useState<GraphNode[]>([
+    { id: '1', label: 'Sample Node', type: 'task' }
+  ]);
+  const [loading, setLoading] = useState(false);
+  const [apiStatus, setApiStatus] = useState<string>('Not tested');
 
-  // UI state
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [apiAvailable, setApiAvailable] = useState(false);
+  // Safe node addition function
+  const addNode = () => {
+    const newId = (nodes.length + 1).toString();
+    setNodes(prev => [...prev, {
+      id: newId,
+      label: `Node ${newId}`,
+      type: Math.random() > 0.5 ? 'task' : 'feature'
+    }]);
+  };
 
-  // Creation state
-  const [showNodeCreation, setShowNodeCreation] = useState(false);
-  const [nodeCreationPosition, setNodeCreationPosition] = useState<{ x: number; y: number } | null>(null);
-  const [showRelationshipPanel, setShowRelationshipPanel] = useState(false);
+  // Manual API data load function - NO automatic useEffect
+  const loadApiData = async () => {
+    setLoading(true);
+    setApiStatus('Testing...');
 
-  // Load work items from backend API
-  useEffect(() => {
-    async function loadWorkItems() {
-      setLoading(true);
-      setError(null);
-
-      try {
-        // First check if API is available
-        const healthCheck = await checkApiHealth();
-        setApiAvailable(healthCheck);
-
-        if (!healthCheck) {
-          // Use sample data if API is not available
-          console.warn('Backend API not available, using sample data');
-          const sampleNodes = [
-            {
-              id: 'sample-1',
-              label: 'User Auth System',
-              type: 'feature',
-              readiness: {
-                requirements: true,
-                design: true,
-                frontend: false,
-                backend: true,
-                integration: false,
-                test: false
-              }
-            },
-            {
-              id: 'sample-2',
-              label: 'Database Schema',
-              type: 'infrastructure',
-              readiness: {
-                requirements: true,
-                design: true,
-                frontend: true,
-                backend: true,
-                integration: true,
-                test: false
-              }
-            },
-            {
-              id: 'sample-3',
-              label: 'API Endpoints',
-              type: 'backend',
-              readiness: {
-                requirements: true,
-                design: false,
-                frontend: false,
-                backend: false,
-                integration: false,
-                test: false
-              }
-            }
-          ];
-
-          const sampleEdges = [
-            {
-              id: 'sample-edge-1',
-              source: 'sample-2',
-              target: 'sample-1',
-              type: 'requires' as const,
-              label: 'requires database'
-            },
-            {
-              id: 'sample-edge-2',
-              source: 'sample-2',
-              target: 'sample-3',
-              type: 'feeds-into' as const,
-              label: 'enables API'
-            }
-          ];
-
-          graphActions.updateNodes(sampleNodes);
-          graphActions.updateEdges(sampleEdges);
-
-          return;
-        }
-
-        // Load actual work items from backend
-        const response = await fetchWorkItems({
-          limit: 50, // Start with reasonable limit
-        });
-
-        // Transform backend data to graph nodes
-        const transformedNodes = response.data.map(transformWorkItemToNode);
-        graphActions.updateNodes(transformedNodes);
-
-        // For now, set empty edges since we're focusing on nodes
-        // Future: Load actual dependency relationships
-        graphActions.updateEdges([]);
-
-        console.log(`Loaded ${transformedNodes.length} work items from backend`);
-
-      } catch (err) {
-        console.error('Failed to load work items:', err);
-
-        if (err instanceof ApiError) {
-          setError(`API Error (${err.status}): ${err.message}`);
-        } else if (err instanceof NetworkError) {
-          setError(`Network Error: ${err.message}`);
-        } else {
-          setError('Unknown error occurred while loading work items');
-        }
-
-        // Fall back to sample data on error
-        graphActions.updateNodes([
-          {
-            id: 'error-fallback',
-            label: 'Error Loading Data',
-            type: 'error',
-            readiness: {
-              requirements: false,
-              design: false,
-              frontend: false,
-              backend: false,
-              integration: false,
-              test: false
-            }
-          }
-        ]);
-        graphActions.updateEdges([]);
-
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadWorkItems();
-  }, [graphActions]);
-
-  // Event handlers for graph interactions
-  const handleCanvasClick = useCallback((position: { x: number; y: number }) => {
-    if (graphState.isCreatingEdge) {
-      // Cancel edge creation on canvas click
-      graphActions.cancelEdgeCreation();
-      setShowRelationshipPanel(false);
-    } else {
-      // Start node creation
-      setNodeCreationPosition(position);
-      setShowNodeCreation(true);
-      graphActions.setCreationMode('node');
-    }
-  }, [graphState.isCreatingEdge, graphActions]);
-
-  const handleNodeClick = useCallback((nodeId: string) => {
-    if (graphState.isCreatingEdge && graphState.sourceNodeId) {
-      // Complete edge creation
-      if (nodeId !== graphState.sourceNodeId) {
-        setShowRelationshipPanel(true);
-      }
-    } else {
-      // Start edge creation or select node
-      graphActions.setSelectedNode(nodeId);
-      graphActions.startEdgeCreation(nodeId);
-      setShowRelationshipPanel(true);
-    }
-  }, [graphState.isCreatingEdge, graphState.sourceNodeId, graphActions]);
-
-  const handleNodeSelect = useCallback((nodeId: string) => {
-    graphActions.setSelectedNode(nodeId);
-    console.log('Node selected:', nodeId);
-
-    // Log node details for debugging
-    const selectedNode = graphState.nodes.find(node => node.id === nodeId);
-    if (selectedNode) {
-      console.log('Selected node details:', selectedNode);
-    }
-  }, [graphActions, graphState.nodes]);
-
-  // Node creation handler
-  const handleCreateNode = useCallback(async (request: CreateNodeRequest) => {
     try {
-      const workItemRequest = {
-        title: request.label,
-        description: request.description,
-        spec: {
-          type: request.type,
-          position: request.position,
-        },
-      };
+      // Step 1: Check API health
+      const isHealthy = await checkApiHealth();
+      if (!isHealthy) {
+        setApiStatus('API Offline');
+        return;
+      }
 
-      const response = await createWorkItem(workItemRequest);
-      const newNode = transformWorkItemToNode(response.data);
+      setApiStatus('Connected');
 
-      graphActions.addNode(newNode);
-      setShowNodeCreation(false);
-      setNodeCreationPosition(null);
-      graphActions.setCreationMode('none');
+      // Step 2: Fetch work items safely
+      const response = await fetchWorkItems({ limit: 10 });
+      const apiNodes = response.data.map(transformWorkItemToNode);
 
-      console.log('Created new node:', newNode);
+      // Debug: Log the data we received
+      console.log('API Response:', response);
+      console.log('Transformed nodes:', apiNodes);
+
+      // Step 3: Update state safely
+      setNodes(apiNodes);
+      setApiStatus(`Loaded ${apiNodes.length} items from backend`);
+
     } catch (error) {
-      console.error('Failed to create node:', error);
-      throw error;
+      setApiStatus(`Error: ${error instanceof Error ? error.message : 'Unknown'}`);
+    } finally {
+      setLoading(false);
     }
-  }, [graphActions]);
-
-  // Relationship creation handler
-  const handleCreateRelationship = useCallback(async (request: CreateRelationshipRequest) => {
-    try {
-      const dependencyRequest = {
-        toWorkItemId: request.targetNodeId,
-        relationshipType: request.type,
-        properties: { label: request.label },
-      };
-
-      const response = await createDependency(request.sourceNodeId, dependencyRequest);
-
-      const newEdge: RelationshipEdge = {
-        id: response.data.relationshipId,
-        source: request.sourceNodeId,
-        target: request.targetNodeId,
-        type: request.type,
-        label: request.label,
-      };
-
-      graphActions.addEdge(newEdge);
-      setShowRelationshipPanel(false);
-      graphActions.cancelEdgeCreation();
-
-      console.log('Created new relationship:', newEdge);
-    } catch (error) {
-      console.error('Failed to create relationship:', error);
-      throw error;
-    }
-  }, [graphActions]);
-
+  };
   return (
-    <div className="h-screen-safe flex flex-col">
+    <div className="h-screen flex flex-col">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
         <div>
@@ -271,85 +78,75 @@ export default function Home() {
           <div className="flex items-center gap-4 text-sm text-gray-600">
             <span>Interactive work item dependency visualization</span>
             <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${apiAvailable ? 'bg-green-500' : 'bg-red-500'}`}></div>
-              <span>{apiAvailable ? 'API Connected' : 'API Offline'}</span>
+              <div className="w-2 h-2 rounded-full bg-green-500"></div>
+              <span>System Ready</span>
             </div>
-            {loading && (
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                <span>Loading...</span>
-              </div>
-            )}
           </div>
         </div>
         <div className="flex items-center gap-4 text-sm">
-          {error && (
-            <div className="text-red-600 bg-red-50 px-3 py-1 rounded">
-              {error}
-            </div>
-          )}
-          {graphState.selectedNodeId && (
-            <div className="text-gray-600">
-              Selected: <span className="font-medium">{graphState.selectedNodeId}</span>
-            </div>
-          )}
-          {graphState.isCreatingEdge && (
-            <div className="text-blue-600 bg-blue-50 px-3 py-1 rounded">
-              Creating relationship from: {graphState.sourceNodeId}
-            </div>
-          )}
+          <button
+            onClick={addNode}
+            className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm"
+          >
+            Add Node
+          </button>
+          <button
+            onClick={loadApiData}
+            disabled={loading}
+            className="bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white px-3 py-1 rounded text-sm"
+          >
+            {loading ? 'Loading...' : 'Load API Data'}
+          </button>
           <div className="text-gray-500">
-            Nodes: {graphState.nodes.length} | Edges: {graphState.edges.length}
+            Nodes: {nodes.length} | API: {apiStatus}
           </div>
         </div>
       </header>
 
       {/* Main Canvas Area */}
       <main className="flex-1 p-4 relative">
-        <GraphCanvasErrorBoundary>
-          <GraphCanvasSimple
-            nodes={graphState.nodes}
-            edges={graphState.edges}
-            onNodeSelect={handleNodeSelect}
-            onCanvasClick={handleCanvasClick}
-            onNodeClick={handleNodeClick}
-            selectedNodeId={graphState.selectedNodeId}
-            isCreatingEdge={graphState.isCreatingEdge}
-            className="w-full h-full"
-          />
-        </GraphCanvasErrorBoundary>
+        <div className="w-full h-full cursor-grab bg-gray-50 border border-gray-200 rounded-lg overflow-hidden relative">
+          {/* Enhanced node visualization */}
+          {nodes.map((node, index) => (
+            <div
+              key={node.id}
+              className="absolute bg-blue-100 border border-blue-300 rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+              style={{
+                left: 50 + index * 200,
+                top: 50 + index * 100,
+                minWidth: '180px',
+              }}
+            >
+              <div className="font-medium text-sm text-gray-800">{node.label}</div>
+              <div className="text-xs text-gray-600 mt-1">ID: {node.id.slice(0, 8)}...</div>
+              <div className="text-xs text-gray-600">Type: {node.type}</div>
 
-        {/* Node Creation Panel */}
-        <NodeCreationPanel
-          isVisible={showNodeCreation}
-          position={nodeCreationPosition || undefined}
-          onCreateNode={handleCreateNode}
-          onCancel={() => {
-            setShowNodeCreation(false);
-            setNodeCreationPosition(null);
-            graphActions.setCreationMode('none');
-          }}
-        />
+              {/* Show readiness if available (API data) */}
+              {node.readiness && (
+                <div className="mt-2 text-xs">
+                  <div className="font-medium text-gray-700">Readiness:</div>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {Object.entries(node.readiness).map(([key, value]) => (
+                      <span
+                        key={key}
+                        className={`px-1 py-0.5 rounded text-xs ${
+                          value ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'
+                        }`}
+                      >
+                        {key.slice(0, 3)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
 
-        {/* Relationship Creation Panel */}
-        <RelationshipPanel
-          isVisible={showRelationshipPanel && graphState.sourceNodeId !== null}
-          sourceNodeId={graphState.sourceNodeId}
-          sourceNodeLabel={
-            graphState.sourceNodeId
-              ? graphState.nodes.find(n => n.id === graphState.sourceNodeId)?.label
-              : undefined
-          }
-          availableTargets={graphState.nodes
-            .filter(node => node.id !== graphState.sourceNodeId)
-            .map(node => ({ id: node.id, label: node.label }))
-          }
-          onCreateRelationship={handleCreateRelationship}
-          onCancel={() => {
-            setShowRelationshipPanel(false);
-            graphActions.cancelEdgeCreation();
-          }}
-        />
+          {/* Debug info */}
+          <div className="absolute bottom-4 left-4 text-xs text-gray-400 bg-white px-2 py-1 rounded border">
+            Debug: {nodes.length} nodes rendered successfully
+          </div>
+        </div>
       </main>
     </div>
   );

@@ -1,4 +1,4 @@
-import { Sprint, SprintStatus } from '../domain/entities/Sprint.js';
+import { Sprint } from '../domain/entities/Sprint.js';
 import { ScreenGroup } from '../domain/entities/ScreenGroup.js';
 import { WorkItem } from '../domain/entities/WorkItem.js';
 

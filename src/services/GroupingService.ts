@@ -1,6 +1,5 @@
 import { ScreenGroup } from '../domain/entities/ScreenGroup.js';
 import { WorkItem, DeliverableType } from '../domain/entities/WorkItem.js';
-import { ReadinessState } from '../domain/entities/ReadinessState.js';
 
 export interface IGroupingService {
   createScreenGroup(

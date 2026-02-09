@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { container } from '../../factories/container.js';
-import { SprintService, SprintTimelineData, AutoPlanningOptions } from '../../services/SprintService.js';
+import { SprintService, AutoPlanningOptions } from '../../services/SprintService.js';
 import { Sprint, SprintStatus } from '../../domain/entities/Sprint.js';
 
 const router = Router();
