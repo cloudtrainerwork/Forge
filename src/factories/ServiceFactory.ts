@@ -7,6 +7,8 @@ import { GraphRepository } from '../infrastructure/neo4j/GraphRepository.js';
 import { WorkItemService } from '../services/WorkItemService.js';
 import { ReadinessService } from '../services/ReadinessService.js';
 import { AuditTrailService } from '../services/AuditTrailService.js';
+import { GroupingService } from '../services/GroupingService.js';
+import { SprintService } from '../services/SprintService.js';
 import type { IWorkItemRepository } from '../adapters/IWorkItemRepository.js';
 import type { IGraphRepository } from '../adapters/IGraphRepository.js';
 
@@ -68,6 +70,14 @@ export class ServiceFactory {
 
     this.container.bind<ReadinessService>('ReadinessService')
       .to(ReadinessService)
+      .inSingletonScope();
+
+    this.container.bind<GroupingService>('GroupingService')
+      .to(GroupingService)
+      .inSingletonScope();
+
+    this.container.bind<SprintService>('SprintService')
+      .to(SprintService)
       .inSingletonScope();
 
     this.isConfigured = true;

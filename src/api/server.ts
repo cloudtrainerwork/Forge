@@ -4,6 +4,8 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import { workItemRoutes } from './routes/workItems.js';
 import { readinessRoutes } from './routes/readiness.js';
+import groupingRoutes from './routes/grouping.js';
+import sprintsRoutes from './routes/sprints.js';
 import { ServiceFactory } from '../factories/ServiceFactory.js';
 
 /**
@@ -73,6 +75,12 @@ export class ApiServer {
     // Mount readiness routes directly for convenience
     apiRouter.use('/', readinessRoutes(this.serviceFactory));
 
+    // Grouping routes
+    apiRouter.use('/', groupingRoutes);
+
+    // Sprint routes
+    apiRouter.use('/', sprintsRoutes);
+
     // Mount API router
     this.app.use('/api/v1', apiRouter);
 
@@ -85,7 +93,9 @@ export class ApiServer {
         endpoints: {
           health: '/health',
           workItems: '/api/v1/work-items',
-          readiness: '/api/v1/readiness'
+          readiness: '/api/v1/readiness',
+          groups: '/api/v1/groups',
+          sprints: '/api/v1/sprints'
         }
       });
     });
