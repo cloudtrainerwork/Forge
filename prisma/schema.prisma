@@ -23,15 +23,31 @@ model HealthCheck {
 
 // Work item model with flexible JSONB spec and readiness tracking
 model WorkItem {
-  id          String   @id @default(cuid())
-  title       String?
-  description String?
-  spec        Json     @db.JsonB // Flexible work item specifications
-  readiness   Json     @db.JsonB // 6-dimensional readiness tracking
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id                      String                   @id @default(cuid())
+  title                   String?
+  description             String?
+  spec                    Json                     @db.JsonB // Flexible work item specifications
+  readiness               Json                     @db.JsonB // 6-dimensional readiness tracking
+  readinessConfigurationId String?                  @map("readiness_configuration_id")
+  readinessConfiguration   ReadinessConfiguration? @relation(fields: [readinessConfigurationId], references: [id])
+  createdAt               DateTime                 @default(now()) @map("created_at")
+  updatedAt               DateTime                 @updatedAt @map("updated_at")
 
   @@map("work_items")
+}
+
+// Readiness configuration for custom states and validation rules
+model ReadinessConfiguration {
+  id              String     @id @default(cuid())
+  name            String     @unique
+  description     String?
+  states          Json       @db.JsonB // StateConfiguration[]
+  validationRules Json       @db.JsonB // ValidationRule[]
+  workItems       WorkItem[]
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  @@map("readiness_configurations")
 }
 
 // Audit log for complete traceability
@@ -51,4 +67,6 @@ enum AuditLogType {
   RELATIONSHIP_ADDED
   RELATIONSHIP_REMOVED
   READINESS_UPDATED
+  READINESS_CONFIG_CREATED
+  READINESS_CONFIG_UPDATED
 }
