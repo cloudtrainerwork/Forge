@@ -26,7 +26,7 @@ class GraphCanvasErrorBoundary extends Component<Props, State> {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+  componentDidCatch() {
     // Log error details for debugging
     // GraphCanvas Error Boundary caught an error - auto-recovering
 

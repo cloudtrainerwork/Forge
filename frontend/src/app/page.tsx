@@ -38,7 +38,7 @@ export default function Home() {
   // Initialize readiness data on component mount
   useEffect(() => {
     initializeReadinessData();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const initializeReadinessData = async () => {
     try {
@@ -341,7 +341,7 @@ export default function Home() {
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="text-center text-gray-500">
                 <h3 className="text-lg font-medium mb-2">Welcome to FORGE</h3>
-                <p className="text-sm mb-4">Click "Add Node" to start building your dependency graph</p>
+                <p className="text-sm mb-4">Click &ldquo;Add Node&rdquo; to start building your dependency graph</p>
                 <p className="text-xs">Nodes will show readiness indicators once added</p>
               </div>
             </div>
