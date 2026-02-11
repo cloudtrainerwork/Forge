@@ -270,14 +270,14 @@ export function transformWorkItemToNode(workItem: BackendWorkItem): {
   return {
     id: workItem.id,
     label: workItem.title || `Work Item ${workItem.id.slice(0, 8)}`,
-    type: (typeof workItem.spec.type === 'string' ? workItem.spec.type : 'work-item'),
+    type: workItem.type || workItem.spec?.type || workItem.spec?.nodeType || 'work-item',
     readiness: {
-      requirements: workItem.readiness.requirements === 'COMPLETE',
-      design: workItem.readiness.design === 'COMPLETE',
-      frontend: workItem.readiness.frontend === 'COMPLETE',
-      backend: workItem.readiness.backend === 'COMPLETE',
-      integration: workItem.readiness.integration === 'COMPLETE',
-      test: workItem.readiness.test === 'COMPLETE',
+      requirements: workItem.readiness?.requirements === 'COMPLETE' || false,
+      design: workItem.readiness?.design === 'COMPLETE' || false,
+      frontend: workItem.readiness?.frontend === 'COMPLETE' || false,
+      backend: workItem.readiness?.backend === 'COMPLETE' || false,
+      integration: workItem.readiness?.integration === 'COMPLETE' || false,
+      test: workItem.readiness?.test === 'COMPLETE' || false,
     },
   };
 }

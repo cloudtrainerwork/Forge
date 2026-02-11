@@ -103,7 +103,7 @@ class OfflineQueue {
     this.saveQueue();
 
     // Try to process if online
-    if (navigator.onLine) {
+    if (typeof navigator !== 'undefined' && navigator.onLine) {
       this.processQueue();
     }
   }
@@ -146,7 +146,9 @@ class OfflineQueue {
 
   private saveQueue(): void {
     try {
-      localStorage.setItem('readiness_offline_queue', JSON.stringify(this.queue));
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        localStorage.setItem('readiness_offline_queue', JSON.stringify(this.queue));
+      }
     } catch (error) {
       console.warn('Failed to save offline queue:', error);
     }
@@ -154,9 +156,11 @@ class OfflineQueue {
 
   private loadQueue(): void {
     try {
-      const saved = localStorage.getItem('readiness_offline_queue');
-      if (saved) {
-        this.queue = JSON.parse(saved);
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        const saved = localStorage.getItem('readiness_offline_queue');
+        if (saved) {
+          this.queue = JSON.parse(saved);
+        }
       }
     } catch (error) {
       console.warn('Failed to load offline queue:', error);
@@ -165,6 +169,10 @@ class OfflineQueue {
   }
 
   init(): void {
+    if (typeof window === 'undefined') {
+      return; // Skip initialization on server side
+    }
+
     this.loadQueue();
 
     // Listen for online events

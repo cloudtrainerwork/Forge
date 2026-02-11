@@ -1,5 +1,9 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
+import { enableMapSet } from 'immer';
+
+// Enable Map/Set support for Immer
+enableMapSet();
 
 // Types from backend API
 export interface ReadinessState {
