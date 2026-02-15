@@ -23,6 +23,7 @@ import ForgeDetailNodeEditable from './ForgeDetailNodeEditable';
 import { NODE_TEMPLATES } from './NodePalette';
 import { saveScreenData, loadScreenData, APIError, NetworkError, ValidationError } from '../utils/api';
 import { useOfflineQueue } from '../hooks/useOfflineQueue';
+import ErrorBoundary from './ErrorBoundary';
 
 // FORGE color palette
 const C = {
@@ -161,10 +162,12 @@ function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailVi
 
   // Performance monitoring
   const lastRenderTime = useRef<number>(0);
-  const memoryCheckInterval = useRef<NodeJS.Timeout>();
+  const memoryCheckInterval = useRef<ReturnType<typeof setInterval>>();
 
-  // Measure render performance
+  // Measure render performance (client-side only)
   const measureRenderTime = useCallback((start: number, operation: string) => {
+    if (typeof window === 'undefined') return 0;
+
     const duration = performance.now() - start;
     lastRenderTime.current = duration;
 
@@ -180,8 +183,10 @@ function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailVi
     return duration;
   }, [nodes.length]);
 
-  // Check memory usage
+  // Check memory usage (client-side only)
   const checkMemoryUsage = useCallback(() => {
+    if (typeof window === 'undefined') return 0;
+
     if ('memory' in performance && (performance as any).memory) {
       const memory = (performance as any).memory;
       const usedMB = Math.round(memory.usedJSHeapSize / 1024 / 1024);
@@ -486,7 +491,7 @@ function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailVi
   // Performance testing utilities
   const generateTestNodes = useCallback((count: number) => {
     const testNodes: Node[] = [];
-    const startTime = performance.now();
+    const startTime = typeof window !== 'undefined' ? performance.now() : 0;
 
     for (let i = 0; i < count; i++) {
       const x = (i % 20) * 200 + Math.random() * 100;
@@ -527,19 +532,19 @@ function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailVi
     showSuccess(`Starting performance test with ${nodeCount} nodes...`);
 
     try {
-      const startTime = performance.now();
+      const startTime = typeof window !== 'undefined' ? performance.now() : 0;
 
       // Generate test nodes
       const testNodes = generateTestNodes(nodeCount);
 
       // Update state and measure render time
-      const renderStart = performance.now();
+      const renderStart = typeof window !== 'undefined' ? performance.now() : 0;
       setNodes(prevNodes => [...prevNodes.filter(n => n.id === 'main-screen'), ...testNodes]);
 
       // Wait for next tick to measure actual render
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      const totalTime = performance.now() - startTime;
+      const totalTime = typeof window !== 'undefined' ? performance.now() - startTime : 0;
       const memoryUsage = checkMemoryUsage();
 
       console.log(`🚀 Performance Test Results for ${nodeCount} nodes:`);
@@ -844,13 +849,13 @@ function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailVi
         nodes={nodes}
         edges={edges}
         onNodesChange={(changes) => {
-          const start = performance.now();
+          const start = typeof window !== 'undefined' ? performance.now() : 0;
           onNodesChange(changes);
           setUnsavedChanges(true);
           measureRenderTime(start, 'nodes change');
         }}
         onEdgesChange={(changes) => {
-          const start = performance.now();
+          const start = typeof window !== 'undefined' ? performance.now() : 0;
           onEdgesChange(changes);
           setUnsavedChanges(true);
           measureRenderTime(start, 'edges change');
@@ -1303,8 +1308,10 @@ function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailVi
 
 export default function ForgeDetailViewEnhanced(props: ForgeDetailViewEnhancedProps) {
   return (
-    <ReactFlowProvider>
-      <ForgeDetailFlowEnhanced {...props} />
-    </ReactFlowProvider>
+    <ErrorBoundary>
+      <ReactFlowProvider>
+        <ForgeDetailFlowEnhanced {...props} />
+      </ReactFlowProvider>
+    </ErrorBoundary>
   );
 }

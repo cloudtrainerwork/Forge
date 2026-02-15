@@ -32,15 +32,17 @@ const SYNC_INTERVAL = 5000; // Check every 5 seconds when online
 
 export function useOfflineQueue(screenId: string) {
   const [state, setState] = useState<OfflineQueueState>({
-    isOnline: navigator.onLine,
+    isOnline: true, // Start optimistically online to prevent hydration mismatch
     isSyncing: false,
     queueLength: 0,
     hasErrors: false,
   });
 
-  // Load queue from localStorage
+  // Load queue from localStorage (client-side only)
   const loadQueue = useCallback((): QueuedOperation[] => {
     try {
+      if (typeof window === 'undefined') return [];
+
       const stored = localStorage.getItem(STORAGE_KEY);
       if (!stored) return [];
 
@@ -52,9 +54,11 @@ export function useOfflineQueue(screenId: string) {
     }
   }, []);
 
-  // Save queue to localStorage
+  // Save queue to localStorage (client-side only)
   const saveQueue = useCallback((queue: QueuedOperation[]) => {
     try {
+      if (typeof window === 'undefined') return;
+
       localStorage.setItem(STORAGE_KEY, JSON.stringify(queue));
       setState(prev => ({ ...prev, queueLength: queue.length }));
     } catch (error) {
@@ -213,6 +217,9 @@ export function useOfflineQueue(screenId: string) {
 
   // Handle online/offline status changes
   useEffect(() => {
+    // Set initial online status after hydration
+    setState(prev => ({ ...prev, isOnline: navigator.onLine }));
+
     const handleOnline = () => {
       console.log('🌐 Connection restored - processing offline queue');
       setState(prev => ({ ...prev, isOnline: true }));
