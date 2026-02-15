@@ -21,7 +21,8 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import ForgeDetailNodeEditable from './ForgeDetailNodeEditable';
 import { NODE_TEMPLATES } from './NodePalette';
-import { saveScreenData, loadScreenData } from '../utils/api';
+import { saveScreenData, loadScreenData, APIError, NetworkError, ValidationError } from '../utils/api';
+import { useOfflineQueue } from '../hooks/useOfflineQueue';
 
 // FORGE color palette
 const C = {
@@ -140,8 +141,57 @@ function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailVi
   const [unsavedChanges, setUnsavedChanges] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
+
+  // Initialize offline queue
+  const offlineQueue = useOfflineQueue(screenId);
+
+  // Clear messages after timeout
+  React.useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(null), 8000); // 8 seconds for errors
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
+
+  React.useEffect(() => {
+    if (successMessage) {
+      const timer = setTimeout(() => setSuccessMessage(null), 3000); // 3 seconds for success
+      return () => clearTimeout(timer);
+    }
+  }, [successMessage]);
+
+  // Display error with user-friendly messages
+  const showError = (err: any, operation: string = 'operation') => {
+    let message = `Failed to ${operation}`;
+
+    if (err instanceof APIError) {
+      if (err instanceof NetworkError) {
+        message = `${operation} queued for when connection is restored`;
+        // Don't show as error for network issues if offline queue is working
+        if (!offlineQueue.state.isOnline) {
+          setSuccessMessage(message);
+          return;
+        }
+      } else if (err instanceof ValidationError) {
+        message = `Invalid data: ${err.message}`;
+      } else {
+        message = err.message;
+      }
+    }
+
+    setError(message);
+    console.error(`Error during ${operation}:`, err);
+  };
+
+  // Show success message
+  const showSuccess = (message: string) => {
+    setSuccessMessage(message);
+    setError(null);
+  };
 
   // Create initial nodes - start with just the main screen
   const initialNodes: Node[] = [
@@ -173,6 +223,8 @@ function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailVi
   React.useEffect(() => {
     const loadInitialData = async () => {
       setLoading(true);
+      setError(null);
+
       try {
         const screenData = await loadScreenData(screenId);
 
@@ -188,13 +240,19 @@ function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailVi
           }));
           setNodes(nodesWithHandlers);
           setEdges(screenData.edges);
+          showSuccess(`Loaded ${screenData.nodes.length} work items`);
         } else {
           // Keep the initial main screen node if no data exists
           console.log('No existing data found, using initial main screen');
+          showSuccess('Ready to create work items');
         }
-      } catch (error) {
-        console.error('Failed to load screen data:', error);
-        // Keep initial nodes on error
+      } catch (err) {
+        if (err instanceof NetworkError) {
+          showError(err, 'load data');
+          // Continue with initial nodes for offline usage
+        } else {
+          showError(err, 'load screen data');
+        }
       } finally {
         setLoading(false);
       }
@@ -335,11 +393,21 @@ function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailVi
   // Add node programmatically - functionality available but currently unused in UI
   // Will be integrated with palette functionality in future improvements
 
-  // Save changes
+  // Save changes with error handling and offline support
   const handleSave = useCallback(async () => {
     setSaving(true);
+    setError(null);
 
     try {
+      if (!offlineQueue.state.isOnline) {
+        // Queue for offline sync
+        offlineQueue.queueScreenSave(nodes, edges);
+        showSuccess('Changes queued for sync when online');
+        setUnsavedChanges(false);
+        return;
+      }
+
+      // Attempt immediate save
       await saveScreenData(screenId, nodes, edges);
 
       if (onSave) {
@@ -347,14 +415,20 @@ function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailVi
       }
 
       setUnsavedChanges(false);
-      alert('Changes saved successfully!');
-    } catch (error) {
-      console.error('Failed to save changes:', error);
-      alert('Failed to save changes. Please try again.');
+      showSuccess('Changes saved successfully!');
+    } catch (err) {
+      if (err instanceof NetworkError) {
+        // Fallback to offline queue
+        offlineQueue.queueScreenSave(nodes, edges);
+        showSuccess('Changes queued for sync when connection restored');
+        setUnsavedChanges(false);
+      } else {
+        showError(err, 'save changes');
+      }
     } finally {
       setSaving(false);
     }
-  }, [screenId, nodes, edges, onSave]);
+  }, [screenId, nodes, edges, onSave, offlineQueue]);
 
   // Clear all (except main)
   const handleClear = useCallback(() => {
@@ -599,6 +673,78 @@ function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailVi
           zoomable
         />
 
+        {/* Connection Status & Messages */}
+        <Panel position="top-center" className="p-2" style={{ zIndex: 1100 }}>
+          <div className="flex flex-col items-center space-y-2">
+            {/* Connection Status */}
+            {!offlineQueue.state.isOnline && (
+              <div
+                className="px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-2"
+                style={{
+                  background: C.yellow,
+                  color: 'white',
+                  border: `1px solid ${C.yellow}`
+                }}
+              >
+                <span>📡</span>
+                Offline - {offlineQueue.state.queueLength} operations queued
+              </div>
+            )}
+
+            {offlineQueue.state.isSyncing && (
+              <div
+                className="px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-2"
+                style={{
+                  background: C.blue,
+                  color: 'white',
+                  border: `1px solid ${C.blue}`,
+                  animation: 'pulse 1.5s ease-in-out infinite'
+                }}
+              >
+                <span>⚡</span>
+                Syncing...
+              </div>
+            )}
+
+            {/* Error Message */}
+            {error && (
+              <div
+                className="px-4 py-2 rounded-lg text-sm font-medium max-w-md text-center flex items-center gap-2"
+                style={{
+                  background: C.red,
+                  color: 'white',
+                  border: `1px solid ${C.red}`
+                }}
+              >
+                <span>⚠️</span>
+                {error}
+                <button
+                  onClick={() => setError(null)}
+                  className="ml-2 text-white hover:opacity-75"
+                  style={{ fontSize: '14px' }}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            {/* Success Message */}
+            {successMessage && (
+              <div
+                className="px-4 py-2 rounded-lg text-sm font-medium max-w-md text-center flex items-center gap-2"
+                style={{
+                  background: C.green,
+                  color: 'white',
+                  border: `1px solid ${C.green}`
+                }}
+              >
+                <span>✅</span>
+                {successMessage}
+              </div>
+            )}
+          </div>
+        </Panel>
+
         {/* Toolbar Panel */}
         <Panel position="top-left" className="p-4" style={{ zIndex: 1000, pointerEvents: 'none' }}>
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16, pointerEvents: 'auto' }}>
@@ -685,15 +831,54 @@ function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailVi
 
               <button
                 onClick={handleSave}
+                disabled={saving}
                 className="px-3 py-1.5 rounded text-xs font-medium transition-all"
                 style={{
-                  background: unsavedChanges ? C.green : C.surfaceAlt,
-                  color: unsavedChanges ? 'white' : C.textDim,
-                  border: `1px solid ${unsavedChanges ? C.green : C.border}`,
+                  background: saving
+                    ? C.blue
+                    : unsavedChanges
+                      ? C.green
+                      : C.surfaceAlt,
+                  color: saving || unsavedChanges ? 'white' : C.textDim,
+                  border: `1px solid ${saving ? C.blue : unsavedChanges ? C.green : C.border}`,
+                  opacity: saving ? 0.8 : 1,
+                  cursor: saving ? 'not-allowed' : 'pointer',
                 }}
               >
-                💾 Save {unsavedChanges && '•'}
+                {saving ? '⏳ Saving...' : `💾 Save ${unsavedChanges ? '•' : ''}`}
               </button>
+
+              {/* Sync Now Button (when offline) */}
+              {!offlineQueue.state.isOnline && offlineQueue.state.queueLength > 0 && (
+                <button
+                  onClick={() => offlineQueue.syncNow()}
+                  disabled={offlineQueue.state.isSyncing}
+                  className="px-3 py-1.5 rounded text-xs font-medium transition-all"
+                  style={{
+                    background: offlineQueue.state.isSyncing ? C.blue : C.yellow,
+                    color: 'white',
+                    border: `1px solid ${offlineQueue.state.isSyncing ? C.blue : C.yellow}`,
+                    opacity: offlineQueue.state.isSyncing ? 0.8 : 1,
+                  }}
+                >
+                  {offlineQueue.state.isSyncing ? '⚡ Syncing...' : '🔄 Sync Now'}
+                </button>
+              )}
+
+              {/* Retry Button (when errors) */}
+              {offlineQueue.state.hasErrors && (
+                <button
+                  onClick={() => offlineQueue.syncNow()}
+                  className="px-3 py-1.5 rounded text-xs font-medium transition-all"
+                  style={{
+                    background: C.red,
+                    color: 'white',
+                    border: `1px solid ${C.red}`,
+                  }}
+                >
+                  🔄 Retry Failed
+                </button>
+              )}
 
               {/* Debug Info */}
               {selectedNodes.length > 0 && (
