@@ -174,14 +174,14 @@ function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailVi
     // Log performance in development
     if (process.env.NODE_ENV === 'development') {
       if (duration > 16) { // Above 60 FPS threshold
-        console.warn(`🐌 Slow render (${duration.toFixed(2)}ms) for ${operation} with ${nodes.length} nodes`);
+        console.warn(`🐌 Slow render (${duration.toFixed(2)}ms) for ${operation} with ${nodeCount || 0} nodes`);
       } else if (duration > 8) { // Above 120 FPS threshold
         console.log(`⚡ Render time: ${duration.toFixed(2)}ms for ${operation}`);
       }
     }
 
     return duration;
-  }, [nodes.length]);
+  }, []);
 
   // Check memory usage (client-side only)
   const checkMemoryUsage = useCallback(() => {
