@@ -50,8 +50,8 @@ interface ForgeDetailViewEnhancedProps {
   onSave?: (nodes: Node[], edges: Edge[]) => void;
 }
 
-// Group node component with editable label and resizable container
-const GroupNode = ({ data, selected }: { data: any; selected?: boolean }) => {
+// Group node component with editable label and resizable container - memoized for performance
+const GroupNode = React.memo(({ data, selected }: { data: any; selected?: boolean }) => {
   const [isEditing, setIsEditing] = React.useState(false);
   const [editLabel, setEditLabel] = React.useState(data.label);
 
@@ -126,13 +126,21 @@ const GroupNode = ({ data, selected }: { data: any; selected?: boolean }) => {
       </div>
     </>
   );
-};
+});
 
 // Custom node types that support editing
 const nodeTypes = {
   editable: ForgeDetailNodeEditable,
   group: GroupNode,
 };
+
+interface PerformanceMetrics {
+  renderTime: number;
+  memoryUsage: number;
+  nodeCount: number;
+  edgeCount: number;
+  timestamp: number;
+}
 
 function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailViewEnhancedProps) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -143,11 +151,96 @@ function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailVi
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showPerformancePanel, setShowPerformancePanel] = useState(false);
+  const [performanceMetrics, setPerformanceMetrics] = useState<PerformanceMetrics[]>([]);
 
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
 
   // Initialize offline queue
   const offlineQueue = useOfflineQueue(screenId);
+
+  // Performance monitoring
+  const lastRenderTime = useRef<number>(0);
+  const memoryCheckInterval = useRef<NodeJS.Timeout>();
+
+  // Measure render performance
+  const measureRenderTime = useCallback((start: number, operation: string) => {
+    const duration = performance.now() - start;
+    lastRenderTime.current = duration;
+
+    // Log performance in development
+    if (process.env.NODE_ENV === 'development') {
+      if (duration > 16) { // Above 60 FPS threshold
+        console.warn(`🐌 Slow render (${duration.toFixed(2)}ms) for ${operation} with ${nodes.length} nodes`);
+      } else if (duration > 8) { // Above 120 FPS threshold
+        console.log(`⚡ Render time: ${duration.toFixed(2)}ms for ${operation}`);
+      }
+    }
+
+    return duration;
+  }, [nodes.length]);
+
+  // Check memory usage
+  const checkMemoryUsage = useCallback(() => {
+    if ('memory' in performance && (performance as any).memory) {
+      const memory = (performance as any).memory;
+      const usedMB = Math.round(memory.usedJSHeapSize / 1024 / 1024);
+      const totalMB = Math.round(memory.totalJSHeapSize / 1024 / 1024);
+      const limitMB = Math.round(memory.jsHeapSizeLimit / 1024 / 1024);
+
+      // Log memory warnings in development
+      if (process.env.NODE_ENV === 'development') {
+        if (usedMB > 100) { // Above 100MB
+          console.warn(`🧠 High memory usage: ${usedMB}MB / ${limitMB}MB (${nodes.length} nodes, ${edges.length} edges)`);
+        }
+      }
+
+      return usedMB;
+    }
+    return 0;
+  }, [nodes.length, edges.length]);
+
+  // Record performance metrics
+  const recordPerformanceMetric = useCallback((renderTime: number) => {
+    const metric: PerformanceMetrics = {
+      renderTime,
+      memoryUsage: checkMemoryUsage(),
+      nodeCount: nodes.length,
+      edgeCount: edges.length,
+      timestamp: Date.now(),
+    };
+
+    setPerformanceMetrics(prev => {
+      const newMetrics = [...prev, metric];
+      // Keep only last 50 metrics to prevent memory leak
+      return newMetrics.slice(-50);
+    });
+  }, [nodes.length, edges.length, checkMemoryUsage]);
+
+  // Performance monitoring setup
+  React.useEffect(() => {
+    // Start memory monitoring in development
+    if (process.env.NODE_ENV === 'development') {
+      memoryCheckInterval.current = setInterval(() => {
+        checkMemoryUsage();
+      }, 5000); // Check every 5 seconds
+
+      return () => {
+        if (memoryCheckInterval.current) {
+          clearInterval(memoryCheckInterval.current);
+        }
+      };
+    }
+  }, [checkMemoryUsage]);
+
+  // Clean up on unmount
+  React.useEffect(() => {
+    return () => {
+      if (memoryCheckInterval.current) {
+        clearInterval(memoryCheckInterval.current);
+      }
+    };
+  }, []);
 
   // Clear messages after timeout
   React.useEffect(() => {
@@ -389,6 +482,117 @@ function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailVi
     },
     [reactFlowInstance, nodeIdCounter, setNodes, handleNodeUpdate, handleNodeDelete]
   );
+
+  // Performance testing utilities
+  const generateTestNodes = useCallback((count: number) => {
+    const testNodes: Node[] = [];
+    const startTime = performance.now();
+
+    for (let i = 0; i < count; i++) {
+      const x = (i % 20) * 200 + Math.random() * 100;
+      const y = Math.floor(i / 20) * 150 + Math.random() * 50;
+
+      testNodes.push({
+        id: `test-node-${i}`,
+        type: 'editable',
+        position: { x, y },
+        data: {
+          id: `test-node-${i}`,
+          label: `Test Node ${i}`,
+          templateKey: 'component',
+          currentState: 'Active',
+          notes: `Generated test node ${i} for performance testing`,
+          readiness: {
+            requirements: Math.random(),
+            design: Math.random(),
+            frontend: Math.random(),
+            backend: Math.random(),
+            integration: Math.random(),
+            test: Math.random(),
+          },
+          onUpdate: (data: any) => handleNodeUpdate(`test-node-${i}`, data),
+          onDelete: () => handleNodeDelete(`test-node-${i}`),
+        },
+      });
+    }
+
+    const renderTime = measureRenderTime(startTime, `generate ${count} test nodes`);
+    recordPerformanceMetric(renderTime);
+
+    return testNodes;
+  }, [handleNodeUpdate, handleNodeDelete, measureRenderTime, recordPerformanceMetric]);
+
+  const runPerformanceTest = useCallback(async (nodeCount: number) => {
+    setLoading(true);
+    showSuccess(`Starting performance test with ${nodeCount} nodes...`);
+
+    try {
+      const startTime = performance.now();
+
+      // Generate test nodes
+      const testNodes = generateTestNodes(nodeCount);
+
+      // Update state and measure render time
+      const renderStart = performance.now();
+      setNodes(prevNodes => [...prevNodes.filter(n => n.id === 'main-screen'), ...testNodes]);
+
+      // Wait for next tick to measure actual render
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      const totalTime = performance.now() - startTime;
+      const memoryUsage = checkMemoryUsage();
+
+      console.log(`🚀 Performance Test Results for ${nodeCount} nodes:`);
+      console.log(`   Total time: ${totalTime.toFixed(2)}ms`);
+      console.log(`   Memory usage: ${memoryUsage}MB`);
+      console.log(`   Average time per node: ${(totalTime / nodeCount).toFixed(2)}ms`);
+
+      if (totalTime > 1000) {
+        showError(new Error(`Performance test failed: ${totalTime.toFixed(2)}ms for ${nodeCount} nodes (>1s)`), 'performance test');
+      } else if (totalTime > 500) {
+        showError(new Error(`Performance warning: ${totalTime.toFixed(2)}ms for ${nodeCount} nodes (>500ms)`), 'performance test');
+      } else {
+        showSuccess(`Performance test passed: ${totalTime.toFixed(2)}ms for ${nodeCount} nodes`);
+      }
+
+      setUnsavedChanges(true);
+    } catch (err) {
+      showError(err, 'performance test');
+    } finally {
+      setLoading(false);
+    }
+  }, [generateTestNodes, checkMemoryUsage, measureRenderTime, recordPerformanceMetric, showError, showSuccess, setNodes]);
+
+  const clearTestData = useCallback(() => {
+    const nonTestNodes = nodes.filter(node => !node.id.startsWith('test-node-'));
+    setNodes(nonTestNodes);
+    setEdges([]);
+    setUnsavedChanges(true);
+    showSuccess('Test data cleared');
+  }, [nodes, setNodes, setEdges, showSuccess]);
+
+  // Performance optimizations for ReactFlow
+  const reactFlowConfig = React.useMemo(() => ({
+    // Optimize for performance with large graphs
+    nodesDraggable: true,
+    nodesConnectable: true,
+    elementsSelectable: true,
+    snapToGrid: true,
+    snapGrid: [15, 15] as [number, number],
+    // Reduce re-renders
+    attributionPosition: 'bottom-left' as const,
+    // Enable multi-selection for better UX
+    multiSelectionKeyCode: 'Meta' as const,
+    selectionKeyCode: 'Meta' as const,
+    panOnDrag: true,
+    // Optimize zoom for performance
+    zoomOnScroll: true,
+    zoomOnPinch: true,
+    zoomOnDoubleClick: false, // Disable to prevent accidental zoom
+    preventScrolling: true,
+    // Delete key functionality
+    deleteKeyCode: 'Delete' as const,
+  }), []);
 
   // Add node programmatically - functionality available but currently unused in UI
   // Will be integrated with palette functionality in future improvements
@@ -640,12 +844,16 @@ function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailVi
         nodes={nodes}
         edges={edges}
         onNodesChange={(changes) => {
+          const start = performance.now();
           onNodesChange(changes);
           setUnsavedChanges(true);
+          measureRenderTime(start, 'nodes change');
         }}
         onEdgesChange={(changes) => {
+          const start = performance.now();
           onEdgesChange(changes);
           setUnsavedChanges(true);
+          measureRenderTime(start, 'edges change');
         }}
         onConnect={onConnect}
         onNodeClick={onNodeClick}
@@ -657,11 +865,8 @@ function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailVi
         onDragOver={onDragOver}
         nodeTypes={nodeTypes}
         fitView
-        deleteKeyCode="Delete"
         style={{ background: C.bg }}
-        multiSelectionKeyCode="Meta"
-        selectionKeyCode="Meta"
-        panOnDrag={true}
+        {...reactFlowConfig}
       >
         <Background color={C.border} gap={20} />
         <Controls style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.text }} />
@@ -878,6 +1083,104 @@ function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailVi
                 >
                   🔄 Retry Failed
                 </button>
+              )}
+
+              {/* Performance Testing Section */}
+              {process.env.NODE_ENV === 'development' && (
+                <>
+                  <hr style={{ margin: '12px 0', borderColor: C.border }} />
+
+                  <div className="text-xs font-bold" style={{ color: C.textMuted, marginBottom: '8px' }}>
+                    Performance Testing
+                  </div>
+
+                  <button
+                    onClick={() => setShowPerformancePanel(!showPerformancePanel)}
+                    className="px-3 py-1.5 rounded text-xs font-medium transition-all mb-2"
+                    style={{
+                      background: showPerformancePanel ? C.purple : C.surfaceAlt,
+                      color: showPerformancePanel ? 'white' : C.text,
+                      border: `1px solid ${showPerformancePanel ? C.purple : C.border}`,
+                      width: '100%',
+                    }}
+                  >
+                    📊 {showPerformancePanel ? 'Hide' : 'Show'} Performance Panel
+                  </button>
+
+                  {showPerformancePanel && (
+                    <div className="space-y-2">
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => runPerformanceTest(50)}
+                          disabled={loading}
+                          className="px-2 py-1 rounded text-xs font-medium transition-all flex-1"
+                          style={{
+                            background: C.blue,
+                            color: 'white',
+                            border: `1px solid ${C.blue}`,
+                            opacity: loading ? 0.6 : 1,
+                          }}
+                        >
+                          50 Nodes
+                        </button>
+                        <button
+                          onClick={() => runPerformanceTest(100)}
+                          disabled={loading}
+                          className="px-2 py-1 rounded text-xs font-medium transition-all flex-1"
+                          style={{
+                            background: C.yellow,
+                            color: 'white',
+                            border: `1px solid ${C.yellow}`,
+                            opacity: loading ? 0.6 : 1,
+                          }}
+                        >
+                          100 Nodes
+                        </button>
+                        <button
+                          onClick={() => runPerformanceTest(200)}
+                          disabled={loading}
+                          className="px-2 py-1 rounded text-xs font-medium transition-all flex-1"
+                          style={{
+                            background: C.red,
+                            color: 'white',
+                            border: `1px solid ${C.red}`,
+                            opacity: loading ? 0.6 : 1,
+                          }}
+                        >
+                          200 Nodes
+                        </button>
+                      </div>
+
+                      <button
+                        onClick={clearTestData}
+                        className="px-3 py-1.5 rounded text-xs font-medium transition-all w-full"
+                        style={{
+                          background: C.surfaceAlt,
+                          color: C.text,
+                          border: `1px solid ${C.border}`,
+                        }}
+                      >
+                        🧹 Clear Test Data
+                      </button>
+
+                      {/* Performance Metrics Display */}
+                      {performanceMetrics.length > 0 && (
+                        <div className="p-2 rounded text-xs" style={{ background: C.bg, border: `1px solid ${C.border}` }}>
+                          <div style={{ color: C.textMuted }}>Latest Performance:</div>
+                          <div style={{ color: C.text }}>
+                            {performanceMetrics[performanceMetrics.length - 1]?.renderTime.toFixed(2)}ms render
+                          </div>
+                          <div style={{ color: C.text }}>
+                            {performanceMetrics[performanceMetrics.length - 1]?.memoryUsage}MB memory
+                          </div>
+                          <div style={{ color: C.text }}>
+                            {performanceMetrics[performanceMetrics.length - 1]?.nodeCount} nodes
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
 
               {/* Debug Info */}
