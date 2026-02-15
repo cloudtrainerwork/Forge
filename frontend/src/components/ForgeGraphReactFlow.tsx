@@ -20,6 +20,9 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useNavigationStore } from '@/stores/navigationStore';
+import TemplateSelector from './TemplateSelector';
+import ProjectNavigator from './ProjectNavigator';
+import { WORKFLOW_TEMPLATES } from '@/data/workflowTemplates';
 
 // FORGE color palette
 const C = {
@@ -83,10 +86,12 @@ interface ForgeEdgeData {
 }
 
 // Custom Node Component
-function ForgeNode({ data }: { data: ForgeNodeData }) {
+function ForgeNode({ data, onDrillDown }: { data: ForgeNodeData; onDrillDown?: (nodeId: string) => void }) {
   const nodeType = NTYPES[data.type];
   const readinessValues = Object.values(data.readiness);
   const avgReadiness = readinessValues.reduce((a, b) => a + b, 0) / readinessValues.length;
+
+  // Debug logging removed - was causing console spam
 
   const statusConfig = {
     READY: { label: "Ready", color: C.green, bg: C.greenDim },
@@ -101,6 +106,13 @@ function ForgeNode({ data }: { data: ForgeNodeData }) {
     DEFERRED: 'BLOCKED'
   };
   const status = statusConfig[statusMap[data.confidence] || 'BLOCKED'];
+
+  const handleDrillDown = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onDrillDown) {
+      onDrillDown(data.id);
+    }
+  };
 
   return (
     <div
@@ -163,8 +175,32 @@ function ForgeNode({ data }: { data: ForgeNodeData }) {
         <div style={{ color: nodeType.color, fontSize: 10, fontWeight: 600 }}>
           {nodeType.icon} {nodeType.label.toUpperCase()}
         </div>
-        <div style={{ fontSize: 10, fontWeight: 600 }}>
-          SPEC
+        <div className="flex items-center gap-1">
+          {/* Drill down button for SCREEN nodes */}
+          {data.type === 'SCREEN' && onDrillDown && (
+            <button
+              onClick={handleDrillDown}
+              className="p-1 rounded hover:scale-110 transition-transform"
+              style={{
+                background: C.accent,
+                color: 'white',
+                border: 'none',
+                fontSize: 8,
+                width: 16,
+                height: 16,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+              }}
+              title="Drill down into screen details"
+            >
+              ↘
+            </button>
+          )}
+          <div style={{ fontSize: 10, fontWeight: 600 }}>
+            SPEC
+          </div>
         </div>
       </div>
 
@@ -216,10 +252,7 @@ function ForgeNode({ data }: { data: ForgeNodeData }) {
   );
 }
 
-// Node types for ReactFlow
-const nodeTypes = {
-  forgeNode: ForgeNode,
-};
+// Node types for ReactFlow - moved inside component to access handleDrillDown
 
 // API functions
 async function saveNodePosition(nodeId: string, x: number, y: number) {
@@ -271,6 +304,10 @@ function ForgeGraphFlow() {
   const [edges, setEdges] = useState<Edge[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedNode, setSelectedNode] = useState<ForgeNodeData | null>(null);
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
+  const [currentProject, setCurrentProject] = useState<{id: string; name: string; templateId?: string} | null>(null);
+  const [projects, setProjects] = useState<Array<{id: string; name: string; templateId?: string; nodes?: Node[]; edges?: Edge[]}>>([]);
+  const [showProjectNav, setShowProjectNav] = useState(false);
 
   const { fitView } = useReactFlow();
   const { navigateToDetail } = useNavigationStore();
@@ -340,6 +377,79 @@ function ForgeGraphFlow() {
     loadData();
   }, [fitView]);
 
+  // Load template when selected
+  const loadTemplate = useCallback((templateId: string, customName?: string) => {
+    const template = WORKFLOW_TEMPLATES.find(t => t.id === templateId);
+    if (!template) return;
+
+    // Store project with custom name
+    const projectName = customName || template.name;
+    const projectId = `project-${Date.now()}`;
+    const newProject = { id: projectId, name: projectName, templateId };
+    setCurrentProject(newProject);
+
+    // Transform template nodes to FORGE format
+    const forgeNodes: Node[] = template.nodes.map((node) => ({
+      id: node.id,
+      type: 'forgeNode',
+      position: node.position,
+      data: {
+        id: node.id,
+        type: node.data.type as keyof typeof NTYPES,
+        label: node.data.label,
+        description: node.data.description,
+        readiness: {
+          Requirements: node.data.readiness?.requirements || 0,
+          Design: node.data.readiness?.design || 0,
+          Frontend: node.data.readiness?.frontend || 0,
+          Backend: node.data.readiness?.backend || 0,
+          Integration: node.data.readiness?.integration || 0,
+          Test: node.data.readiness?.test || 0,
+        },
+        confidence: 'medium',
+      },
+      draggable: true,
+    }));
+
+    // Transform template edges to FORGE format
+    const forgeEdges: Edge[] = template.edges.map((edge, i) => ({
+      id: edge.id || `edge-${i}`,
+      source: edge.source,
+      target: edge.target,
+      type: 'smoothstep',
+      style: {
+        stroke: C.blue,
+        strokeWidth: 1.5,
+      },
+      markerEnd: {
+        type: 'arrow',
+        color: C.blue,
+      },
+    }));
+
+    setNodes(forgeNodes);
+    setEdges(forgeEdges);
+
+    // Save project to projects list
+    const projectWithData = {
+      ...newProject,
+      nodes: forgeNodes,
+      edges: forgeEdges
+    };
+    setProjects(prev => {
+      const updated = [...prev, projectWithData];
+      // Save to localStorage
+      localStorage.setItem('forgeProjects', JSON.stringify(updated));
+      return updated;
+    });
+
+    setShowTemplateSelector(false);
+    setLoading(false);
+
+    // Fit view after template loads
+    setTimeout(() => fitView(), 100);
+  }, [fitView]);
+
   // Handle node changes (position updates)
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -394,13 +504,11 @@ function ForgeGraphFlow() {
     setSelectedNode(node.data);
   }, []);
 
-  // Handle node double-click (drill down)
-  const onNodeDoubleClick = useCallback((event: React.MouseEvent, node: Node) => {
+  // Handle drill-down navigation
+  const handleDrillDown = useCallback((nodeId: string) => {
     // Navigate to detailed view for screens
-    if (node.data.type === 'SCREEN') {
-      navigateToDetail(node.id, node.data.label);
-    }
-  }, [navigateToDetail]);
+    window.location.href = `/workflow/${nodeId}`;
+  }, []);
 
   // Handle edge deletion
   const onEdgeClick = useCallback(async (event: React.MouseEvent, edge: Edge) => {
@@ -411,6 +519,67 @@ function ForgeGraphFlow() {
       }
     }
   }, []);
+
+  // Node types with drill-down handler - memoized to prevent recreating on every render
+  const nodeTypes = React.useMemo(
+    () => createNodeTypes(handleDrillDown),
+    [handleDrillDown]
+  );
+
+  // Load projects from localStorage on mount
+  useEffect(() => {
+    const savedProjects = localStorage.getItem('forgeProjects');
+    if (savedProjects) {
+      try {
+        const parsed = JSON.parse(savedProjects);
+        setProjects(parsed);
+        // Load the first project by default
+        if (parsed.length > 0 && !currentProject) {
+          const firstProject = parsed[0];
+          setCurrentProject(firstProject);
+          if (firstProject.nodes && firstProject.edges) {
+            setNodes(firstProject.nodes);
+            setEdges(firstProject.edges);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load saved projects:', e);
+      }
+    }
+  }, []);
+
+  // Handle project selection
+  const handleSelectProject = useCallback((project: any) => {
+    setCurrentProject(project);
+    if (project.nodes && project.edges) {
+      setNodes(project.nodes);
+      setEdges(project.edges);
+      setLoading(false);
+      setTimeout(() => fitView(), 100);
+    }
+    setShowProjectNav(false);
+  }, [fitView]);
+
+  // Handle project deletion
+  const handleDeleteProject = useCallback((projectId: string) => {
+    setProjects(prev => {
+      const updated = prev.filter(p => p.id !== projectId);
+      localStorage.setItem('forgeProjects', JSON.stringify(updated));
+
+      // If deleting current project, switch to another or clear
+      if (currentProject?.id === projectId) {
+        if (updated.length > 0) {
+          handleSelectProject(updated[0]);
+        } else {
+          setCurrentProject(null);
+          setNodes([]);
+          setEdges([]);
+        }
+      }
+
+      return updated;
+    });
+  }, [currentProject, handleSelectProject]);
 
   if (loading) {
     return (
@@ -432,7 +601,6 @@ function ForgeGraphFlow() {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeClick={onNodeClick}
-        onNodeDoubleClick={onNodeDoubleClick}
         onEdgeClick={onEdgeClick}
         nodeTypes={nodeTypes}
         fitView
@@ -449,9 +617,38 @@ function ForgeGraphFlow() {
         />
       </ReactFlow>
 
-      {/* Legend */}
+      {/* Legend & Controls */}
       <div className="absolute top-4 left-4 p-4 rounded-lg" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
-        <h2 className="text-sm font-bold mb-2" style={{ color: C.text }}>FORGE Workflow</h2>
+        <h2 className="text-sm font-bold mb-2" style={{ color: C.text }}>
+          {currentProject ? currentProject.name : 'FORGE Workflow'}
+        </h2>
+
+        {/* Projects Button */}
+        <button
+          onClick={() => setShowProjectNav(!showProjectNav)}
+          className="w-full mb-2 px-3 py-2 rounded text-xs font-medium transition-all hover:scale-[1.02]"
+          style={{
+            background: showProjectNav ? C.accent : C.surfaceAlt,
+            color: showProjectNav ? 'white' : C.text,
+            border: `1px solid ${showProjectNav ? C.accent : C.border}`,
+          }}
+        >
+          📁 Projects ({projects.length})
+        </button>
+
+        {/* Template Button */}
+        <button
+          onClick={() => setShowTemplateSelector(true)}
+          className="w-full mb-3 px-3 py-2 rounded text-xs font-medium transition-all hover:scale-[1.02]"
+          style={{
+            background: C.accent,
+            color: 'white',
+            border: 'none',
+          }}
+        >
+          🚀 New from Template
+        </button>
+
         <div className="space-y-1 text-xs" style={{ color: C.textMuted }}>
           <div>• Drag nodes to move</div>
           <div>• Drag from handles to connect</div>
@@ -507,9 +704,32 @@ function ForgeGraphFlow() {
           </div>
         </div>
       )}
+
+      {/* Template Selector */}
+      <TemplateSelector
+        isOpen={showTemplateSelector}
+        onSelectTemplate={loadTemplate}
+        onClose={() => setShowTemplateSelector(false)}
+      />
+
+      {/* Project Navigator */}
+      <ProjectNavigator
+        projects={projects}
+        currentProject={currentProject}
+        onSelectProject={handleSelectProject}
+        onNewProject={() => setShowTemplateSelector(true)}
+        onDeleteProject={handleDeleteProject}
+        isOpen={showProjectNav}
+        onClose={() => setShowProjectNav(false)}
+      />
     </div>
   );
 }
+
+// Define nodeTypes outside of component to prevent recreation
+const createNodeTypes = (onDrillDown: (nodeId: string) => void) => ({
+  forgeNode: (props: any) => <ForgeNode {...props} onDrillDown={onDrillDown} />,
+});
 
 // Wrapper component with ReactFlowProvider
 export default function ForgeGraphReactFlow() {

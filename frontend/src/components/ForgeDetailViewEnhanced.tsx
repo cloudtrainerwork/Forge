@@ -196,22 +196,22 @@ function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailVi
       // Log memory warnings in development
       if (process.env.NODE_ENV === 'development') {
         if (usedMB > 100) { // Above 100MB
-          console.warn(`🧠 High memory usage: ${usedMB}MB / ${limitMB}MB (${nodes.length} nodes, ${edges.length} edges)`);
+          console.warn(`🧠 High memory usage: ${usedMB}MB / ${limitMB}MB`);
         }
       }
 
       return usedMB;
     }
     return 0;
-  }, [nodes.length, edges.length]);
+  }, []);
 
   // Record performance metrics
-  const recordPerformanceMetric = useCallback((renderTime: number) => {
+  const recordPerformanceMetric = useCallback((renderTime: number, nodeCount: number = 0, edgeCount: number = 0) => {
     const metric: PerformanceMetrics = {
       renderTime,
       memoryUsage: checkMemoryUsage(),
-      nodeCount: nodes.length,
-      edgeCount: edges.length,
+      nodeCount,
+      edgeCount,
       timestamp: Date.now(),
     };
 
@@ -220,7 +220,7 @@ function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailVi
       // Keep only last 50 metrics to prevent memory leak
       return newMetrics.slice(-50);
     });
-  }, [nodes.length, edges.length, checkMemoryUsage]);
+  }, [checkMemoryUsage]);
 
   // Performance monitoring setup
   React.useEffect(() => {
@@ -522,7 +522,7 @@ function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailVi
     }
 
     const renderTime = measureRenderTime(startTime, `generate ${count} test nodes`);
-    recordPerformanceMetric(renderTime);
+    recordPerformanceMetric(renderTime, count, 0);
 
     return testNodes;
   }, [handleNodeUpdate, handleNodeDelete, measureRenderTime, recordPerformanceMetric]);
@@ -569,12 +569,11 @@ function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailVi
   }, [generateTestNodes, checkMemoryUsage, measureRenderTime, recordPerformanceMetric, showError, showSuccess, setNodes]);
 
   const clearTestData = useCallback(() => {
-    const nonTestNodes = nodes.filter(node => !node.id.startsWith('test-node-'));
-    setNodes(nonTestNodes);
+    setNodes(prevNodes => prevNodes.filter(node => !node.id.startsWith('test-node-')));
     setEdges([]);
     setUnsavedChanges(true);
     showSuccess('Test data cleared');
-  }, [nodes, setNodes, setEdges, showSuccess]);
+  }, [setNodes, setEdges, showSuccess]);
 
   // Performance optimizations for ReactFlow
   const reactFlowConfig = React.useMemo(() => ({
