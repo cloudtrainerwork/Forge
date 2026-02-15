@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { useNavigationStore } from '@/stores/navigationStore';
 
 const C = {
@@ -17,7 +18,25 @@ const C = {
 };
 
 export default function BreadcrumbNav() {
+  const router = useRouter();
   const { breadcrumbs, navigateToBreadcrumb } = useNavigationStore();
+
+  const handleBreadcrumbClick = (index: number) => {
+    const crumb = breadcrumbs[index];
+    navigateToBreadcrumb(index);
+
+    // Navigate based on the breadcrumb level
+    if (crumb.level === 'project') {
+      router.push('/');
+    } else if (crumb.level === 'category') {
+      // For category view, we might want to navigate to a category-specific page
+      // For now, just go to the main page with the category selected
+      router.push('/');
+    } else if (crumb.level === 'detail' && crumb.nodeId) {
+      // Navigate to the specific workflow detail page
+      router.push(`/workflow/${crumb.nodeId}`);
+    }
+  };
 
   return (
     <div
@@ -34,7 +53,7 @@ export default function BreadcrumbNav() {
             <span style={{ color: C.textDim }}>/</span>
           )}
           <button
-            onClick={() => navigateToBreadcrumb(index)}
+            onClick={() => handleBreadcrumbClick(index)}
             className="hover:underline transition-colors"
             style={{
               color: index === breadcrumbs.length - 1 ? C.accent : C.textMuted,

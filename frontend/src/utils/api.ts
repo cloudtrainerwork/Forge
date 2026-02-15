@@ -272,35 +272,70 @@ export async function saveWorkItems(screenId: string, nodes: Node[]): Promise<vo
     });
 
     const errors: APIError[] = [];
+    const createdItems = new Set<string>();
 
-    // Since we don't have screen-specific endpoints in the mock backend yet,
-    // we'll use the basic endpoints for now
+    // First, try to create or update each work item
     for (const item of workItems) {
       try {
-        // Try to update existing item first
-        await apiCall(`/work-items/${item.id}/position`, {
-          method: 'PUT',
-          body: JSON.stringify({
-            x: item.x,
-            y: item.y,
-          }),
-        });
+        // First, try to check if the item exists by updating its position
+        try {
+          await apiCall(`/work-items/${item.id}/position`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              x: item.x,
+              y: item.y,
+            }),
+          });
+        } catch (positionError) {
+          // If we get a 404, the item doesn't exist - create it
+          if (positionError instanceof APIError && positionError.status === 404) {
+            // Create the work item
+            await apiCall('/work-items', {
+              method: 'POST',
+              body: JSON.stringify({
+                id: item.id,
+                title: item.label,
+                description: item.notes || '',
+                type: item.type || 'task',
+                x: item.x,
+                y: item.y,
+                readiness: item.readiness || {
+                  requirements: 0,
+                  design: 0,
+                  frontend: 0,
+                  backend: 0,
+                  integration: 0,
+                  test: 0,
+                },
+                confidence: item.state || 'low',
+              }),
+            });
+            createdItems.add(item.id);
+            console.log(`Created new work item: ${item.id}`);
+          } else {
+            throw positionError;
+          }
+        }
       } catch (error) {
         if (error instanceof APIError) {
-          // For 404 errors, this might be a new item - skip for now
-          if (error.status !== 404) {
+          // Ignore 409 conflicts (item already exists)
+          if (error.status !== 409) {
             errors.push(error);
+            console.error(`Failed to save work item ${item.id}:`, error.message);
           }
-          console.log(`Could not update position for ${item.id}:`, error.message);
         } else {
-          errors.push(new APIError(`Failed to update item ${item.id}: ${error}`));
+          errors.push(new APIError(`Failed to save item ${item.id}: ${error}`));
         }
       }
     }
 
     // If we have critical errors, throw
-    if (errors.length > 0 && errors.some(e => !e.retryable)) {
+    if (errors.length > 0 && errors.some(e => !e.retryable && e.status !== 409)) {
       throw new APIError(`Failed to save ${errors.length} work items`);
+    }
+
+    if (createdItems.size > 0) {
+      console.log(`Successfully created ${createdItems.size} new work items`);
     }
   } catch (error) {
     if (error instanceof APIError) {
@@ -333,13 +368,20 @@ export async function saveDependencies(screenId: string, edges: Edge[]): Promise
             type: dependency.type || 'requires',
           }),
         });
+        console.log(`Created dependency: ${dependency.source} -> ${dependency.target}`);
       } catch (error) {
         if (error instanceof APIError) {
-          // For 409 (conflict) errors, dependency might already exist
-          if (error.status !== 409) {
+          // For 409 (conflict) errors, dependency might already exist - that's fine
+          // For 400 errors, nodes might not exist yet - log but don't fail
+          if (error.status === 409) {
+            console.log(`Dependency already exists: ${dependency.source} -> ${dependency.target}`);
+          } else if (error.status === 400) {
+            console.warn(`Could not create dependency ${dependency.source} -> ${dependency.target}: Nodes may not exist in backend yet`);
+            // Don't add to errors for 400 as nodes might be created later
+          } else {
             errors.push(error);
+            console.error(`Failed to create dependency ${dependency.source} -> ${dependency.target}:`, error.message);
           }
-          console.log(`Could not create dependency ${dependency.source} -> ${dependency.target}:`, error.message);
         } else {
           errors.push(new APIError(`Failed to create dependency ${dependency.source} -> ${dependency.target}: ${error}`));
         }
@@ -442,11 +484,10 @@ export async function saveScreenData(
   edges: Edge[]
 ): Promise<void> {
   try {
-    // Save both in parallel using the updated functions
-    await Promise.all([
-      saveWorkItems(screenId, nodes),
-      saveDependencies(screenId, edges),
-    ]);
+    // Save work items first, then dependencies
+    // This ensures nodes exist before creating dependencies between them
+    await saveWorkItems(screenId, nodes);
+    await saveDependencies(screenId, edges);
   } catch (error) {
     console.error('Error saving screen data:', error);
     throw error;
