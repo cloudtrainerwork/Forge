@@ -136,11 +136,11 @@ const nodeTypes = {
 function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailViewEnhancedProps) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
-  const [selectedElements, setSelectedElements] = useState<{ nodes: string[], edges: string[] }>({ nodes: [], edges: [] });
   const [showPalette, setShowPalette] = useState(true);
   const [unsavedChanges, setUnsavedChanges] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
 
   // Create initial nodes - start with just the main screen
@@ -171,10 +171,37 @@ function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailVi
 
   // Load existing data when component mounts
   React.useEffect(() => {
-    // Temporarily skip API loading to test grouping functionality
-    setLoading(false);
-    console.log('Skipping API load for grouping testing');
-  }, [screenId, setNodes, setEdges]);
+    const loadInitialData = async () => {
+      setLoading(true);
+      try {
+        const screenData = await loadScreenData(screenId);
+
+        if (screenData.nodes.length > 0) {
+          // Set real backend data with proper onUpdate and onDelete handlers
+          const nodesWithHandlers = screenData.nodes.map(node => ({
+            ...node,
+            data: {
+              ...node.data,
+              onUpdate: (data: any) => handleNodeUpdate(node.id, data),
+              onDelete: () => handleNodeDelete(node.id),
+            },
+          }));
+          setNodes(nodesWithHandlers);
+          setEdges(screenData.edges);
+        } else {
+          // Keep the initial main screen node if no data exists
+          console.log('No existing data found, using initial main screen');
+        }
+      } catch (error) {
+        console.error('Failed to load screen data:', error);
+        // Keep initial nodes on error
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadInitialData();
+  }, [screenId]);
 
   // Handle node updates
   const handleNodeUpdate = useCallback((nodeId: string, data: any) => {
@@ -246,10 +273,7 @@ function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailVi
       setSelectedNodes([node.id]);
     }
 
-    setSelectedElements({
-      nodes: [node.id],
-      edges: [],
-    });
+    // Node selection handled by selectedNodes state
   }, []);
 
   // Handle selection change
@@ -279,9 +303,6 @@ function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailVi
       }
 
       const template = NODE_TEMPLATES[templateKey as keyof typeof NODE_TEMPLATES];
-      const reactFlowBounds = reactFlowWrapper.current.getBoundingClientRect();
-
-      // Calculate position relative to the ReactFlow container
       const position = reactFlowInstance.screenToFlowPosition({
         x: event.clientX,
         y: event.clientY,
@@ -311,50 +332,28 @@ function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailVi
     [reactFlowInstance, nodeIdCounter, setNodes, handleNodeUpdate, handleNodeDelete]
   );
 
-  // Add node programmatically
-  const addNode = useCallback((templateKey: keyof typeof NODE_TEMPLATES, position?: XYPosition) => {
-    const template = NODE_TEMPLATES[templateKey];
-    const newPosition = position || {
-      x: Math.random() * 500 + 200,
-      y: Math.random() * 400 + 100
-    };
-
-    const newNodeId = `node-${Date.now()}-${nodeIdCounter}`;
-    const newNode: Node = {
-      id: newNodeId,
-      type: 'editable',
-      position: newPosition,
-      data: {
-        id: newNodeId,
-        label: `${template.label} ${nodeIdCounter}`,
-        templateKey,
-        currentState: template.defaultState || template.states?.[0],
-        customStates: template.states,
-        notes: '',
-        onUpdate: (data: any) => handleNodeUpdate(newNodeId, data),
-        onDelete: () => handleNodeDelete(newNodeId),
-      },
-    };
-
-    setNodes((nds) => nds.concat(newNode));
-    setNodeIdCounter((prev) => prev + 1);
-    setUnsavedChanges(true);
-  }, [nodeIdCounter, setNodes, handleNodeUpdate, handleNodeDelete]);
+  // Add node programmatically - functionality available but currently unused in UI
+  // Will be integrated with palette functionality in future improvements
 
   // Save changes
   const handleSave = useCallback(async () => {
     setSaving(true);
 
-    // Temporarily skip API save for testing
-    console.log('Would save:', { nodes, edges });
+    try {
+      await saveScreenData(screenId, nodes, edges);
 
-    if (onSave) {
-      onSave(nodes, edges);
+      if (onSave) {
+        onSave(nodes, edges);
+      }
+
+      setUnsavedChanges(false);
+      alert('Changes saved successfully!');
+    } catch (error) {
+      console.error('Failed to save changes:', error);
+      alert('Failed to save changes. Please try again.');
+    } finally {
+      setSaving(false);
     }
-
-    setUnsavedChanges(false);
-    alert('Changes saved locally (API disabled for testing)!');
-    setSaving(false);
   }, [screenId, nodes, edges, onSave]);
 
   // Clear all (except main)
@@ -377,7 +376,7 @@ function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailVi
     const angleStep = (2 * Math.PI) / otherNodes.length;
     const radius = 300;
 
-    const updatedNodes = nodes.map((node, index) => {
+    const updatedNodes = nodes.map((node) => {
       if (node.id === 'main-screen') {
         return { ...node, position: { x: 400, y: 300 } };
       }
@@ -454,7 +453,7 @@ function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailVi
       return;
     }
 
-    const childNodes = nodes.filter(n => n.parentId === groupNode.id);
+    // Remove the group node and update child positions
 
     // Update child nodes to remove parent relationship
     const updatedNodes = nodes.map(node => {
