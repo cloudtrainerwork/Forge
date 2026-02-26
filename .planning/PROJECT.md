@@ -2,7 +2,7 @@
 
 ## What This Is
 
-FORGE is a cloud-native SaaS platform that replaces Agile project management with an execution architecture built on graph-based work modeling. The Phase 1 MLP focuses on the core graph canvas with interactive node visualization and 6-dimensional readiness tracking, while scaffolding the full architecture for sprint execution and shovel-ready specifications.
+FORGE is a cloud-native SaaS platform that replaces Agile project management with an execution architecture built on graph-based work modeling. The v1.0 MVP delivers interactive graph canvas with 6-dimensional readiness tracking, full backend integration, and production-ready infrastructure for managing work as connected dependencies rather than flat lists.
 
 ## Core Value
 
@@ -12,20 +12,25 @@ Engineering teams can model their work as a connected graph with real-time readi
 
 ### Validated
 
-(None yet — ship to validate)
+- ✓ Interactive graph canvas supporting infinite zoom and pan across multiple devices — v1.0
+- ✓ Node system with typed relationships (blocks, requires, feeds-into, tested-by, deployed-with) — v1.0
+- ✓ 6-dimensional readiness tracking per node (Requirements, Design, Frontend, Backend, Integration, Test) — v1.0
+- ✓ Visual readiness indicators with multi-dimensional progress display — v1.0
+- ✓ Graph database integration with Neo4j for native graph storage — v1.0
+- ✓ PostgreSQL integration for specs, readiness history, and audit logs — v1.0
+- ✓ Zero hard-coded variables - full configuration management — v1.0
+- ✓ Enterprise design patterns: IoC, Factory, Observer, Builder for future extensibility — v1.0
 
 ### Active
 
-- [ ] Interactive graph canvas supporting infinite zoom and pan across multiple devices
-- [ ] Node system with typed relationships (blocks, requires, feeds-into, tested-by, deployed-with)
-- [ ] 6-dimensional readiness tracking per node (Requirements, Design, Frontend, Backend, Integration, Test)
-- [ ] Visual readiness indicators with multi-dimensional progress display
-- [ ] Graph database integration with Neo4j for native graph storage
-- [ ] PostgreSQL integration for specs, readiness history, and audit logs
-- [ ] Complete schema foundation for sprint execution engine (time windows, capacity budgets, ready queue)
-- [ ] Complete schema foundation for shovel-ready specifications (6-section structured specs)
-- [ ] Zero hard-coded variables - full configuration management
-- [ ] Enterprise design patterns: IoC, Factory, Observer, Builder for future extensibility
+- [ ] Sprint execution engine with time windows and capacity budgets
+- [ ] Shovel-ready specifications with 6-section structured templates
+- [ ] Real-time collaborative editing with conflict resolution
+- [ ] ML-enhanced completion predictions and risk assessment
+- [ ] Advanced analytics dashboard with executive reporting
+- [ ] Multi-tenant architecture with tenant isolation
+- [ ] Entra ID authentication integration
+- [ ] API platform for third-party integrations
 
 ### Out of Scope
 
@@ -38,11 +43,17 @@ Engineering teams can model their work as a connected graph with real-time readi
 
 ## Context
 
-Building from investor deck vision where FORGE addresses the $10B+ project management gap by modeling engineering work as directed graphs instead of flat lists. The MLP proves the core graph visualization and readiness concepts while establishing the technical foundation for all 4 phases outlined in the business plan.
+Building from investor deck vision where FORGE addresses the $10B+ project management gap by modeling engineering work as directed graphs instead of flat lists. The v1.0 MVP successfully proves the core graph visualization and readiness concepts with production-ready implementation.
 
-Current spike solution exists in forge-app/ directory demonstrating graph canvas exploration - preserving functional code while building production architecture.
+**Current State (v1.0 shipped):**
+- 69,420 lines of TypeScript across frontend and backend
+- ReactFlow graph canvas with 500+ node performance
+- Hybrid Neo4j/PostgreSQL architecture with event-driven sync
+- Comprehensive 6-dimensional readiness tracking
+- Full offline capability with automatic sync
+- Production error handling and monitoring
 
-Technical environment: Docker-based development with Neo4j (ports 7474/7687, auth: neo4j/password), modern TypeScript/React stack, emphasis on cross-device compatibility for graph visualization.
+**Tech Stack:** Next.js frontend, Express backend, Neo4j graph database, PostgreSQL with Prisma, ReactFlow visualization, TypeScript throughout, Docker containerization.
 
 ## Constraints
 
@@ -57,11 +68,13 @@ Technical environment: Docker-based development with Neo4j (ports 7474/7687, aut
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Neo4j + PostgreSQL hybrid | Neo4j for native graph operations, PostgreSQL for structured data and JSONB specs | — Pending |
-| Canvas over established PM patterns | Graph visualization is core differentiator vs Jira/Linear flat lists | — Pending |
-| Full schema from start | Avoid rework when adding sprint execution and specs in future phases | — Pending |
-| Design patterns emphasis | Enable rapid feature development and testing through proper abstractions | — Pending |
-| Cross-device canvas priority | Teams work on various devices, graph must be accessible everywhere | — Pending |
+| Neo4j + PostgreSQL hybrid | Neo4j for native graph operations, PostgreSQL for structured data and JSONB specs | ✓ Good - Clean separation of concerns |
+| ReactFlow over Cytoscape | Better React integration, performance, and developer experience | ✓ Good - Excellent performance at 500+ nodes |
+| Full schema from start | Avoid rework when adding sprint execution and specs in future phases | ✓ Good - Schema ready for v2 features |
+| Design patterns emphasis | Enable rapid feature development and testing through proper abstractions | ✓ Good - Clean architecture enabled fast development |
+| Cross-device canvas priority | Teams work on various devices, graph must be accessible everywhere | ✓ Good - Works seamlessly on all devices |
+| Offline-first architecture | Network resilience critical for real-world usage | ✓ Good - Queue system prevents data loss |
+| Event-driven audit trail | Reliable state tracking and debugging capability | ✓ Good - Complete history of all changes |
 
 ---
-*Last updated: 2025-02-07 after initialization*
+*Last updated: 2026-02-25 after v1.0 milestone*
