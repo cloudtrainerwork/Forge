@@ -9,8 +9,10 @@ import { ReadinessService } from '../services/ReadinessService.js';
 import { AuditTrailService } from '../services/AuditTrailService.js';
 import { GroupingService } from '../services/GroupingService.js';
 import { SprintService } from '../services/SprintService.js';
+import { SpecificationService } from '../services/SpecificationService.js';
 import type { IWorkItemRepository } from '../adapters/IWorkItemRepository.js';
 import type { IGraphRepository } from '../adapters/IGraphRepository.js';
+import type { ISpecificationService } from '../adapters/ISpecificationService.js';
 
 /**
  * IoC container configuration using inversify
@@ -76,6 +78,10 @@ export class ServiceFactory {
       .to(GroupingService)
       .inSingletonScope();
 
+    this.container.bind<ISpecificationService>('ISpecificationService')
+      .to(SpecificationService)
+      .inSingletonScope();
+
     this.container.bind<SprintService>('SprintService')
       .to(SprintService)
       .inSingletonScope();
@@ -132,6 +138,13 @@ export class ServiceFactory {
   }
 
   /**
+   * Get SpecificationService instance
+   */
+  getSpecificationService(): ISpecificationService {
+    return this.getService<ISpecificationService>('ISpecificationService');
+  }
+
+  /**
    * Health check - verify all critical services can be resolved
    */
   async healthCheck(): Promise<{
@@ -141,6 +154,7 @@ export class ServiceFactory {
     readinessRepository: boolean;
     workItemService: boolean;
     readinessService: boolean;
+    specificationService: boolean;
     auditTrailService: boolean;
     overall: boolean;
   }> {
@@ -151,6 +165,7 @@ export class ServiceFactory {
       readinessRepository: false,
       workItemService: false,
       readinessService: false,
+      specificationService: false,
       auditTrailService: false,
       overall: false
     };
@@ -180,6 +195,9 @@ export class ServiceFactory {
       const readinessService = this.getService<ReadinessService>('ReadinessService');
       result.readinessService = true; // ReadinessService doesn't have healthCheck method
 
+      const specificationService = this.getService<ISpecificationService>('ISpecificationService');
+      result.specificationService = true; // SpecificationService doesn't have healthCheck method
+
       const auditService = this.getService<AuditTrailService>('AuditTrailService');
       result.auditTrailService = await auditService.healthCheck();
 
@@ -189,6 +207,7 @@ export class ServiceFactory {
                       result.readinessRepository &&
                       result.workItemService &&
                       result.readinessService &&
+                      result.specificationService &&
                       result.auditTrailService;
 
     } catch (error) {
