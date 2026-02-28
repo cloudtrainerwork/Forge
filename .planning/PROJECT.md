@@ -41,6 +41,15 @@ Engineering teams can model their work as a connected graph with real-time readi
 - Sprint execution interface (schema only, UI deferred)
 - Specification editing interface (schema only, UI deferred)
 
+## Current Milestone: v1.1 Agentic Export
+
+**Goal:** Transform graph nodes into executable specifications with multi-framework agentic export
+
+**Target features:**
+- Shovel-ready specifications with 6-section structured templates
+- Export engine supporting 5 formats (GSD, BMAD, SpecKit, Claude Code, Generic)
+- Sprint execution engine with ready queue and capacity management
+
 ## Context
 
 Building from investor deck vision where FORGE addresses the $10B+ project management gap by modeling engineering work as directed graphs instead of flat lists. The v1.0 MVP successfully proves the core graph visualization and readiness concepts with production-ready implementation.
@@ -77,4 +86,4 @@ Building from investor deck vision where FORGE addresses the $10B+ project manag
 | Event-driven audit trail | Reliable state tracking and debugging capability | ✓ Good - Complete history of all changes |
 
 ---
-*Last updated: 2026-02-25 after v1.0 milestone*
+*Last updated: 2026-02-27 after v1.1 start*
