@@ -65,22 +65,22 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SPEC-01 | Pending | Pending |
-| SPEC-02 | Pending | Pending |
-| SPEC-03 | Pending | Pending |
-| SPEC-04 | Pending | Pending |
-| SPEC-05 | Pending | Pending |
-| EXPORT-01 | Pending | Pending |
-| EXPORT-02 | Pending | Pending |
-| EXPORT-03 | Pending | Pending |
-| EXPORT-04 | Pending | Pending |
-| EXPORT-05 | Pending | Pending |
+| SPEC-01 | Phase 5 | Pending |
+| SPEC-02 | Phase 5 | Pending |
+| SPEC-03 | Phase 7 | Pending |
+| SPEC-04 | Phase 5 | Pending |
+| SPEC-05 | Phase 7 | Pending |
+| EXPORT-01 | Phase 6 | Pending |
+| EXPORT-02 | Phase 6 | Pending |
+| EXPORT-03 | Phase 7 | Pending |
+| EXPORT-04 | Phase 7 | Pending |
+| EXPORT-05 | Phase 6 | Pending |
 
 **Coverage:**
 - v1.1 requirements: 10 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 10 ⚠️
+- Mapped to phases: 10 ✓
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-02-27*
-*Last updated: 2026-02-27 after initial definition*
+*Last updated: 2026-02-27 after roadmap creation*
