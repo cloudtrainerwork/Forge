@@ -1,225 +1,385 @@
-# Pitfalls Research
+# Domain Pitfalls: Adding Specification & Export Systems
 
-**Domain:** Graph-based Project Management SaaS Platform
-**Researched:** 2025-02-07
+**Domain:** Specification Management & Multi-Format Export for Graph-based Project Management
+**Context:** FORGE v1.1 - Adding spec management and export to existing ReactFlow system
+**Researched:** 2026-02-27
 **Confidence:** HIGH
 
 ## Critical Pitfalls
 
-### Pitfall 1: Graph Visualization Browser Memory Death Spiral
+Mistakes that cause rewrites or major issues when adding specification and export systems to existing applications.
 
+### Pitfall 1: ReactFlow State Pollution from Specification Data
 **What goes wrong:**
-Graph visualization becomes unusable as datasets grow beyond browser memory limits (typically 2-8GB depending on browser). Safari kills tabs at ~3GB, Chrome struggles beyond 4-6GB. Users experience browser freezes, crashes, and complete application failure when visualizing complex dependency graphs.
+Adding specification data directly to ReactFlow's internal nodes/edges state causes severe performance degradation and breaks existing canvas functionality. Every specification update triggers unnecessary re-renders across the entire graph canvas, making the application unusable.
 
 **Why it happens:**
-Developers test with small, tidy graphs (10-50 nodes) but real project dependency graphs can reach thousands of nodes. Browser-based visualization engines load all graph data into memory simultaneously, creating memory pressure that exponentially increases with graph complexity.
+Developers access ReactFlow's nodes or edges arrays directly in specification components that change frequently. ReactFlow's state changes during all interactions (dragging, panning, zooming), so components depending on this state re-render constantly.
 
-**How to avoid:**
-Implement progressive loading with view-based querying. Never load entire graph into browser memory. Use data virtualization - only render visible nodes and relationships. Implement graph clustering/aggregation for high-level views. Set hard limits on query result sizes (max 500 nodes per view).
+**Consequences:**
+- Existing canvas interactions become sluggish or unresponsive
+- Specification updates cause entire graph to re-render
+- Browser memory usage spikes during specification editing
+- User experience degrades for core functionality that previously worked well
 
-**Warning signs:**
-- Query times increasing exponentially with dataset size
-- Browser developer tools showing >1GB memory usage
-- User reports of browser "freezing" on large projects
-- Performance degradation on mobile devices first
+**Prevention:**
+- Keep specification data in separate state management system (Zustand/Redux)
+- Store only minimal node metadata in ReactFlow nodes (just IDs, positions)
+- Use memoization and proper React.memo for specification components
+- Implement event-driven communication between canvas and specification systems
+
+**Detection:**
+- Performance profiler shows ReactFlow components updating excessively
+- Canvas becomes slow during specification editing
+- Console warnings about frequent re-renders
+- Browser developer tools show memory spikes during spec operations
 
 **Phase to address:**
-Phase 1 (Core Graph Canvas) - Must implement memory-safe visualization from MVP to prevent architectural debt.
+Phase 1 (Data Architecture) - Must establish proper state separation before any UI development.
 
 ---
 
-### Pitfall 2: The "Looks Like Miro" Trap
-
+### Pitfall 2: Breaking Existing 6-Dimensional Readiness System
 **What goes wrong:**
-Graph becomes an unstructured mind-mapping tool instead of a project execution system. Teams create beautiful dependency graphs that have no connection to actual work completion. Nodes become decorative rather than actionable, leading to project management theatre instead of real progress tracking.
+Adding specification requirements tightly couples to the existing readiness calculation system, breaking backward compatibility with existing projects and causing readiness scores to become inconsistent or fail entirely.
 
 **Why it happens:**
-Visual tools like Miro and Figma train users to think decoratively rather than functionally. Without enforced structure and readiness constraints, teams default to "pretty pictures" that feel productive but don't drive execution.
+New specification system modifies core data models without proper abstraction, making the 6-dimensional readiness dependent on specification completion rather than maintaining them as separate but related systems.
 
-**How to avoid:**
-Enforce 6-dimensional readiness states from day one. Every node must have structured data (requirements, design, frontend, backend, integration, test status). Prevent node creation without readiness framework. Make visual appeal secondary to functional state representation.
+**Consequences:**
+- Existing projects can't load after specification system deployment
+- Readiness calculations show undefined or incorrect values
+- Graph visualization loses connection to readiness states
+- Data migration becomes impossible without data loss
 
-**Warning signs:**
-- Nodes with no defined readiness states
-- Graphs that "look done" but have no completion criteria
-- Teams spending time on graph aesthetics vs. work completion
-- Resistance to structured readiness tracking ("too rigid")
+**Prevention:**
+- Design specification system as additive extension, not replacement
+- Maintain complete backward compatibility with existing readiness data
+- Use adapter patterns to map between legacy and specification-enhanced models
+- Implement feature flags to gradually introduce specification requirements
+
+**Detection:**
+- Existing projects fail to load after deployment
+- Readiness indicators show as undefined or error states
+- Console errors about missing required fields in existing data
+- Graph connections or readiness visualizations disappear
 
 **Phase to address:**
-Phase 1 (Core Graph Canvas) - The readiness system must be core to graph interaction, not an add-on feature.
+Phase 1 (Data Architecture) - Core data model changes must preserve existing functionality.
 
 ---
 
-### Pitfall 3: Neo4j Production Memory Misconfiguration
-
+### Pitfall 3: Multi-Format Export System Coupling
 **What goes wrong:**
-Graph database performance collapses in production due to incorrect memory allocation between heap, page cache, and direct memory. Common result: queries that work in development timeout in production, causing cascade failures across the application.
+Each export format (GSD, BMAD, SpecKit, Claude Code, Generic) is implemented with direct coupling to internal data structures, making the system extremely brittle. Adding new formats requires core model changes, and internal changes break all existing exports.
 
 **Why it happens:**
-Neo4j's default configuration is for development, not production. Memory is split between JVM heap (query execution) and page cache (data caching). Misconfiguration causes either out-of-memory errors or excessive disk I/O. Most developers don't understand these are separate memory pools.
+Export formats implemented as direct data mapping instead of through abstraction layer. Each format contains its own data interpretation logic, leading to inconsistent exports and maintenance nightmares.
 
-**How to avoid:**
-Configure for production workloads: 50% available RAM to page cache, 25% to heap, 25% to OS/other processes. Monitor page cache hit ratios (should be >90%). Use transaction memory limits to prevent runaway queries. Test with production-sized datasets during development.
+**Consequences:**
+- Adding new export formats requires changing core application data models
+- Internal refactoring breaks all existing export formats simultaneously
+- Different export formats produce inconsistent data for the same project
+- Export system becomes exponentially complex to maintain
 
-**Warning signs:**
-- Queries timing out in production but working in development
-- 504 gateway timeout errors from Neo4j Browser
-- Page cache hit ratio below 85%
-- System swap usage increasing
-- "Transaction exceeded memory limit" errors
+**Prevention:**
+- Implement export abstraction layer: Internal Data → Common Format → Export-Specific Serialization
+- Design transformation pipelines that isolate format-specific logic
+- Use export format registry pattern for extensibility
+- Maintain canonical data representation separate from any export format
+
+**Detection:**
+- New export format requires changes to core data models
+- Existing export formats break when internal structure evolves
+- Export generation code scattered throughout the application
+- Different formats show different data for identical projects
 
 **Phase to address:**
-Phase 1 (Core Graph Canvas) - Database architecture must be production-ready from MVP deployment.
+Phase 1 (Export Architecture) - Export system architecture must be established before implementing any specific formats.
 
 ---
 
-### Pitfall 4: Multi-Device Graph Navigation Nightmare
-
+### Pitfall 4: Integration Context Violations with ReactFlow
 **What goes wrong:**
-Graph interface works on desktop but becomes unusable on tablets and mobile devices. Touch interactions conflict with graph manipulation (pan/zoom vs. node selection). Graph canvas optimization for mouse interactions makes touch navigation impossible, destroying multi-device user experience.
+Specification management components attempt to access ReactFlow state outside of the ReactFlow context, causing runtime errors and preventing integration between canvas and specification systems.
 
 **Why it happens:**
-Canvas libraries are designed for mouse precision, not finger interactions. Touch gestures conflict with graph operations (pinch-to-zoom vs. node selection). Mobile viewport constraints make complex graphs unnavigable. Responsive design principles don't apply to infinite canvas interactions.
+Specification components need to read/update node data but are implemented outside ReactFlow's component hierarchy, or developers try to use ReactFlow hooks in components not wrapped by ReactFlowProvider.
 
-**How to avoid:**
-Design touch-first interaction patterns. Separate navigation modes (pan/zoom vs. node interaction). Implement mobile-specific UI affordances (larger touch targets, gesture recognition). Test on actual devices, not browser emulation. Consider device-specific interface adaptations.
+**Consequences:**
+- Runtime errors: "Cannot access ReactFlow state outside context"
+- Specification components can't read or update node-related data
+- Complete breakdown of integration between canvas and specification systems
+- Application becomes unusable when both systems are active
 
-**Warning signs:**
-- Users avoiding mobile access
-- Support requests about "graph not working on tablet"
-- High mobile bounce rates
-- Touch interaction conflicts with intended gestures
-- Impossibility to select/edit nodes on mobile devices
+**Prevention:**
+- Carefully design component hierarchy with proper ReactFlow context boundaries
+- Use ReactFlow hooks only within properly wrapped components
+- Implement data bridge pattern for cross-system communication
+- Design clear interfaces between canvas and specification systems
+
+**Detection:**
+- Console errors about missing ReactFlow context
+- Specification components showing undefined data when canvas is active
+- Runtime exceptions when specification system tries to update node data
+- Integration features that work in isolation but fail when combined
 
 **Phase to address:**
-Phase 1 (Core Graph Canvas) - Multi-device support must be architectural, not retrofitted.
+Phase 2 (UI Integration) - Must be resolved before any canvas-specification integration features.
 
 ---
 
-### Pitfall 5: Flat-List Fallback Anti-Pattern
+## Moderate Pitfalls
 
+Mistakes that cause delays or technical debt.
+
+### Pitfall 5: Specification Versioning Chaos
 **What goes wrong:**
-Under pressure to deliver familiar interfaces, teams implement traditional list/table views as "alternatives" to graph visualization. This immediately undermines the graph-based value proposition and trains users to avoid the core product differentiator.
+Specifications treated as static documents instead of versioned entities, leading to synchronization issues, lost changes, and inability to track specification evolution over time.
 
 **Why it happens:**
-Product managers panic when users request "simple list views" or "Gantt chart exports." Stakeholders familiar with Jira/Linear push for familiar interfaces. Development team finds list views easier to implement than graph optimization.
+Specification system designed without proper versioning, treating specs like simple text documents rather than collaborative, evolving project artifacts.
 
-**How to avoid:**
-Resist the urge to provide "escape hatches" to flat views. Instead, optimize graph interactions to solve the underlying usability issues. If users want lists, improve graph filtering/grouping rather than providing list alternatives. Make graph views so compelling that lists feel inferior.
+**Consequences:**
+- Team members work with different specification versions
+- Specification changes get lost or overwritten
+- No audit trail for specification decisions
+- Export formats contain inconsistent specification versions
+- Unable to roll back specification changes
 
-**Warning signs:**
-- Feature requests for "list view toggle"
-- Stakeholder feedback comparing to Jira/Linear interfaces
-- Development team suggesting "quick list view" as solution
-- User analytics showing preference for non-graph features
-- Product discussions about "hybrid" list+graph interfaces
+**Prevention:**
+- Implement specification versioning from initial development
+- Use event sourcing pattern for specification change tracking
+- Provide clear version management UI with conflict resolution
+- Export version metadata with all specification formats
+- Design collaborative editing with proper conflict resolution
+
+**Detection:**
+- Users report lost specification changes
+- Multiple team members show different specification content
+- Inability to explain how specifications reached current state
+- Export formats show inconsistent specification data
 
 **Phase to address:**
-Phase 1 (Core Graph Canvas) - Core value proposition must be defended from first user interaction.
+Phase 2 (Specification Management) - Versioning must be core to specification data model.
 
 ---
 
-## Technical Debt Patterns
+### Pitfall 6: Export Performance Bottlenecks
+**What goes wrong:**
+Export generation blocks the main UI thread, making the entire application unresponsive during large project exports and providing no way for users to cancel long-running operations.
 
-| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
-|----------|-------------------|----------------|-----------------|
-| Loading entire graph in browser memory | Simple implementation, familiar patterns | Memory crashes, unusable at scale | Never - implement virtual scrolling from start |
-| Using default Neo4j configuration | Works in development | Production performance collapse | Never - configure for production early |
-| Mouse-only canvas interactions | Faster desktop development | Mobile/tablet completely unusable | Never - touch-first design required |
-| Skipping readiness state enforcement | Users can create "anything" | Decorative graphs with no execution value | Never - structured data is core value |
-| Generic canvas library without graph optimization | Rapid prototyping | Poor performance, memory issues | MVP only - plan migration to specialized library |
-| Hard-coded graph layout algorithms | Predictable initial appearance | Unusable with real project complexity | MVP only - dynamic layout algorithms required |
+**Why it happens:**
+Export processing implemented synchronously in main thread without considering the size and complexity of real project data, especially when projects have extensive specifications and complex graph structures.
 
-## Integration Gotchas
+**Consequences:**
+- Application completely freezes during export operations
+- Users cannot cancel exports that are taking too long
+- Browser shows "unresponsive script" warnings
+- Export failures provide no feedback or recovery options
 
-| Integration | Common Mistake | Correct Approach |
-|-------------|----------------|------------------|
-| Neo4j Clustering | Single region deployment with global users | Multi-region deployment with causal consistency |
-| Browser Canvas Libraries | Using generic libraries for graph-specific needs | Graph-optimized rendering engines (Cytoscape.js, vis.js) |
-| Mobile Touch Events | Mouse event handlers for touch devices | Separate touch event handlers with gesture recognition |
-| PostgreSQL Sync | Real-time sync between Neo4j and PostgreSQL | Event-driven sync with conflict resolution |
-| Graph Query Limits | No query result limits | Hard limits: 500 nodes/view, 10MB result sets |
-| Multi-tenant Data | Shared Neo4j instance without tenant isolation | Tenant-specific databases or rigorous data segregation |
+**Prevention:**
+- Use Web Workers for all heavy export processing
+- Implement streaming exports for large datasets
+- Provide progress indicators and cancellation capabilities
+- Add export size estimation and warnings
+- Design incremental export processing with checkpoints
 
-## Performance Traps
+**Detection:**
+- Application becomes unresponsive during export operations
+- Browser warnings about long-running scripts
+- User complaints about inability to cancel exports
+- Export operations that never complete for large projects
 
-| Trap | Symptoms | Prevention | When It Breaks |
-|------|----------|------------|----------------|
-| Unbounded graph traversals | Exponential query time growth | Depth limits, relationship filters | >3 hops, >100 connected nodes |
-| Browser memory accumulation | Progressive slowdown, eventual crash | Virtual rendering, data cleanup | >1000 nodes in browser |
-| Neo4j page cache thrashing | Inconsistent query performance | Proper memory configuration | Dataset > 50% available RAM |
-| Synchronous graph updates | UI freezing during data operations | Async operations with loading states | >100ms update operations |
-| Mobile viewport overflow | Impossible navigation on small screens | Mobile-specific zoom/pan controls | Screens <768px width |
-| Unindexed graph queries | Linear performance degradation | Strategic property indexing | >10,000 nodes |
+**Phase to address:**
+Phase 3 (Export Implementation) - Performance architecture must be established before implementing export formats.
 
-## Security Mistakes
+---
 
-| Mistake | Risk | Prevention |
-|---------|------|------------|
-| Default Neo4j authentication | Production database compromise | LDAP integration, strong password policies |
-| Client-side graph query construction | Cypher injection attacks | Server-side parameterized queries only |
-| Unfiltered tenant data access | Cross-tenant data leakage | Database-level tenant isolation |
-| Graph structure exposure | Competitive intelligence leakage | Query result filtering, access controls |
-| Unencrypted graph database connections | Data interception | TLS/SSL for all database connections |
-| Browser-stored graph credentials | Token theft, session hijacking | Secure token storage, short-lived sessions |
+### Pitfall 7: Specification-Canvas Synchronization Drift
+**What goes wrong:**
+Changes to specifications don't properly update canvas readiness visualization, and changes to canvas readiness don't reflect in specification completion status, creating inconsistent user experience.
 
-## UX Pitfalls
+**Why it happens:**
+No proper synchronization mechanism between specification state management and ReactFlow canvas visualization, leading to data inconsistencies and user confusion.
 
-| Pitfall | User Impact | Better Approach |
-|---------|-------------|-----------------|
-| Infinite empty canvas | User paralysis, unclear starting point | Guided onboarding with template graphs |
-| Complex multi-selection interactions | Frustration with bulk operations | Context-sensitive bulk action menus |
-| No visual feedback for readiness state | Uncertainty about work completion status | Clear, consistent readiness state indicators |
-| Graph state loss on navigation | Lost work, navigation anxiety | Persistent graph state, auto-save |
-| Overwhelming visual complexity | Cognitive overload, tool abandonment | Progressive disclosure, filtering controls |
-| No offline capabilities | Inability to work without connection | Offline-first graph editing with sync |
+**Consequences:**
+- Canvas shows outdated readiness states after specification updates
+- Users see different completion status in canvas vs specification views
+- Specification changes don't trigger visual updates on graph
+- Readiness calculations become unreliable
 
-## "Looks Done But Isn't" Checklist
+**Prevention:**
+- Implement bi-directional synchronization between specification and canvas systems
+- Use centralized state management with event-driven updates
+- Design clear data flow patterns with single source of truth
+- Add automated validation to catch synchronization drift
 
-- [ ] **Graph Canvas:** Often missing touch gesture support — verify on actual mobile devices, not browser emulation
-- [ ] **Neo4j Configuration:** Often missing production memory settings — verify page cache >80% of dataset size
-- [ ] **Readiness States:** Often missing enforcement logic — verify users cannot create nodes without structured data
-- [ ] **Query Performance:** Often missing result limits — verify 500-node maximum per view, timeout at 30 seconds
-- [ ] **Cross-Device Sync:** Often missing conflict resolution — verify simultaneous edits handled gracefully
-- [ ] **Graph Visualization:** Often missing memory management — verify browser usage <1GB with 1000+ nodes
-- [ ] **Database Scaling:** Often missing clustering setup — verify high availability configuration for enterprise
-- [ ] **Mobile Navigation:** Often missing gesture differentiation — verify pan/zoom vs node selection works on touch
+**Detection:**
+- Canvas readiness indicators don't match specification completion status
+- Visual updates lag behind specification changes
+- Users report confusing or contradictory information
+- Automated tests show data inconsistencies
+
+**Phase to address:**
+Phase 2 (UI Integration) - Synchronization must be established when connecting systems.
+
+---
+
+## Minor Pitfalls
+
+Mistakes that cause annoyance but are fixable.
+
+### Pitfall 8: Custom Node Type Registration Failures
+**What goes wrong:**
+Specification-enhanced node types fail to render properly due to missing or incorrect nodeTypes configuration, causing nodes to render as default types without specification features.
+
+**Why it happens:**
+Adding specification capabilities to existing node types without properly updating the ReactFlow nodeTypes registry or mismatched type names between node data and registration.
+
+**Consequences:**
+- Specification-enhanced nodes render as basic default nodes
+- Specification features not visible in node interfaces
+- Inconsistent node appearance across the canvas
+- Users can't access specification functionality from nodes
+
+**Prevention:**
+- Maintain centralized nodeTypes registry with all specification-enhanced types
+- Use TypeScript for type safety in node configuration
+- Implement node type validation in development mode
+- Document node type naming conventions clearly
+
+**Detection:**
+- Nodes showing default appearance instead of custom specification interface
+- Missing specification controls in node UI
+- Console warnings about unknown node types
+- Development tools showing nodeTypes configuration mismatches
+
+**Phase to address:**
+Phase 2 (UI Integration) - Node type registration is part of ReactFlow integration.
+
+---
+
+### Pitfall 9: Export Format Data Inconsistency
+**What goes wrong:**
+Same project data exports with different information across formats due to each format implementing its own data interpretation and filtering logic.
+
+**Why it happens:**
+Export formats make independent decisions about what data to include or how to interpret project information, rather than using consistent data transformation rules.
+
+**Consequences:**
+- Users confused when comparing exports from different formats
+- Some data appears in certain formats but not others
+- External tools receive inconsistent project representations
+- Debugging export issues becomes complex due to format-specific logic
+
+**Prevention:**
+- Define canonical project data representation
+- Implement consistent data transformation rules
+- Use format-specific presentation layers only, not interpretation layers
+- Add export comparison and validation tools
+- Document format-specific limitations clearly
+
+**Detection:**
+- Export comparison shows different data for same project
+- Users report missing information in specific formats
+- Support requests about format-specific data issues
+- Automated tests reveal format inconsistencies
+
+**Phase to address:**
+Phase 3 (Export Implementation) - Data consistency must be verified for each format.
+
+---
+
+### Pitfall 10: Rigid Specification Structure Enforcement
+**What goes wrong:**
+Specification system forces users into inflexible 6-section structure that doesn't accommodate different project types or team workflows, leading to workarounds and user frustration.
+
+**Why it happens:**
+Specification structure hard-coded into the system rather than designed as configurable templates, assuming all projects need identical specification approaches.
+
+**Consequences:**
+- Users create duplicate or irrelevant sections to fit the structure
+- Specifications become verbose and difficult to use
+- Some project types cannot be properly specified
+- Teams develop workarounds that bypass the specification system
+
+**Prevention:**
+- Design flexible specification schemas with configurable sections
+- Provide specification templates but allow customization
+- Support specification inheritance and composition patterns
+- Allow teams to define their own specification structures
+
+**Detection:**
+- User feedback about specification structure limitations
+- Workarounds being used to fit projects into rigid structure
+- Empty or duplicate specification sections
+- Teams avoiding specification system for certain project types
+
+**Phase to address:**
+Phase 2 (Specification Management) - Flexibility should be designed into specification data model.
+
+---
+
+## Phase-Specific Warnings
+
+| Phase Topic | Likely Pitfall | Mitigation Strategy |
+|-------------|---------------|-------------------|
+| Data Architecture | Breaking existing readiness system | Design additive extensions, maintain backward compatibility |
+| ReactFlow Integration | State pollution and context violations | Separate state management, proper context boundaries |
+| Export Architecture | Format coupling and performance bottlenecks | Abstraction layer, async processing with Web Workers |
+| UI Integration | Synchronization drift between canvas and specifications | Event-driven updates, centralized state management |
+| Specification Management | Versioning chaos and rigid structure enforcement | Event sourcing, flexible schema design |
+| Export Implementation | Performance issues and data inconsistency | Streaming exports, canonical data representation |
+| Testing & Validation | Missing edge cases in data transformation | Comprehensive test datasets, format validation suites |
+| Deployment | Breaking existing user workflows | Feature flags, gradual rollout, extensive user testing |
 
 ## Recovery Strategies
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Memory death spiral | HIGH | Complete visualization engine replacement, data virtualization implementation |
-| "Looks like Miro" trap | MEDIUM | Add readiness enforcement, restructure existing graphs with required data |
-| Neo4j misconfiguration | LOW | Memory reconfiguration, potentially requires brief downtime |
-| Multi-device navigation failure | HIGH | Touch interaction redesign, potentially new canvas library |
-| Flat-list fallback | HIGH | Remove list views, improve graph usability to meet user needs |
-| Unindexed graph queries | MEDIUM | Add strategic indexes, potentially requires query pattern analysis |
+| ReactFlow state pollution | HIGH | Redesign state architecture, separate specification data management |
+| Broken readiness system | HIGH | Implement data migration, rebuild backward compatibility layer |
+| Export system coupling | MEDIUM | Add abstraction layer, refactor existing export implementations |
+| Integration context violations | MEDIUM | Restructure component hierarchy, implement data bridge patterns |
+| Specification versioning chaos | MEDIUM | Add versioning system, migrate existing specification data |
+| Export performance bottlenecks | LOW | Move to Web Workers, implement streaming exports |
+| Synchronization drift | MEDIUM | Implement event-driven synchronization, centralized state management |
 
-## Pitfall-to-Phase Mapping
+## Integration-Specific Gotchas
 
-| Pitfall | Prevention Phase | Verification |
-|---------|------------------|--------------|
-| Browser memory death spiral | Phase 1 | Load test with 1000+ node graphs on various browsers |
-| "Looks like Miro" trap | Phase 1 | All nodes require 6-dimensional readiness data |
-| Neo4j misconfiguration | Phase 1 | Production deployment with proper memory allocation |
-| Multi-device navigation nightmare | Phase 1 | Touch interaction testing on actual mobile/tablet devices |
-| Flat-list fallback anti-pattern | Phase 1 | No list/table views in initial release |
-| Query performance degradation | Phase 1 | Hard limits on query results and execution time |
-| Readiness state confusion | Phase 1 | Visual indicators for all 6 readiness dimensions |
-| Cross-tenant data leakage | Phase 1 | Database-level tenant isolation in schema design |
+| Integration | Common Mistake | Correct Approach |
+|-------------|----------------|------------------|
+| ReactFlow + Specifications | Storing spec data in ReactFlow state | Separate state management with event communication |
+| Export + Graph Data | Direct mapping from internal structures | Transformation pipeline with abstraction layer |
+| Readiness + Specifications | Tightly coupling readiness to specification completion | Independent systems with optional integration |
+| Canvas + Specification UI | Accessing ReactFlow state outside context | Proper component hierarchy with data bridges |
+| Multi-format Export | Format-specific data interpretation | Canonical representation with format-specific presentation |
+| Specification Versioning | Treating specifications as static documents | Event sourcing with proper conflict resolution |
+
+## "Looks Done But Isn't" Checklist
+
+- [ ] **State Management:** Often missing proper separation between ReactFlow and specification state — verify independent state systems
+- [ ] **Backward Compatibility:** Often missing migration path for existing projects — verify all existing data loads correctly
+- [ ] **Export Abstraction:** Often missing transformation layer — verify new formats don't require core model changes
+- [ ] **Context Boundaries:** Often missing proper ReactFlow context management — verify specification components access data correctly
+- [ ] **Specification Versioning:** Often missing change tracking — verify specification evolution is auditable
+- [ ] **Export Performance:** Often missing async processing — verify large exports don't block UI
+- [ ] **Data Synchronization:** Often missing bi-directional updates — verify canvas and specifications stay in sync
+- [ ] **Format Consistency:** Often missing canonical data representation — verify all formats export consistent data
 
 ## Sources
 
-- Neo4j Community Forums: Browser performance issues and memory configuration
-- Medium: "We Tried to Scale Neo4j" production deployment experiences
-- ProofHub: Project Management Statistics 2025 failure rates
-- Cambridge Intelligence: Graph database visualization tool comparisons
-- Neo4j Operations Manual: Memory configuration and scaling best practices
-- Moldstud: SaaS responsive design challenges and solutions
-- Project management practitioner reports on graph-based tool failures
-- Browser memory limitation testing and documentation
+- [ReactFlow Common Errors Documentation](https://reactflow.dev/learn/troubleshooting/common-errors) - HIGH confidence
+- [ReactFlow Performance Best Practices](https://reactflow.dev/learn/advanced-use/performance) - HIGH confidence
+- [Graph Database Data Modeling Pitfalls](https://neo4j.com/blog/graph-data-science/data-modeling-pitfalls/) - HIGH confidence
+- [Integration Specification Best Practices 2026](https://www.pandium.com/blogs/what-to-include-in-an-integration-requirements-document-template-included) - MEDIUM confidence
+- [Breaking Changes Avoidance Strategies](https://nordicapis.com/what-are-breaking-changes-and-how-do-you-avoid-them/) - MEDIUM confidence
+- [Project Management Implementation Challenges 2026](https://taskfino.com/blog/project-management-challenges) - MEDIUM confidence
+- [Export System Integration Best Practices](https://www.visualcompliance.com/blog/export-license-management-software-implementation-guide-best-practices-and-success-stories/) - LOW confidence
+- [Multi-Format Export Architecture Patterns](https://ones.com/blog/project-export-formats-workflow/) - LOW confidence
 
 ---
-*Pitfalls research for: Graph-based Project Management SaaS Platform*
-*Researched: 2025-02-07*
+*Pitfalls research for: Adding Specification & Export Systems to FORGE v1.1*
+*Context: ReactFlow-based project management with 6-dimensional readiness*
+*Researched: 2026-02-27*
