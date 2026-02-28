@@ -28,6 +28,11 @@ Building on the proven v1.0 foundation, v1.1 adds structured specification templ
 3. User can save specification changes without affecting canvas performance or visual state
 4. System stores specification data in PostgreSQL JSONB fields separate from Neo4j graph structure
 
+**Plans:** 2 plans
+Plans:
+- [ ] 05-01-PLAN.md — Create specification schema and service layer foundation
+- [ ] 05-02-PLAN.md — Build specification editing UI with structured text input
+
 ---
 
 ### Phase 6: Export Engine
@@ -46,6 +51,11 @@ Building on the proven v1.0 foundation, v1.1 adds structured specification templ
 2. Generated GSD XML contains atomic plans with maximum 3 tasks derived from specification sections
 3. Exported XML follows wave-based execution format compatible with GSD workflow orchestrators
 4. Export process completes within 5 seconds for individual work items without blocking UI
+
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD
 
 ---
 
@@ -67,15 +77,20 @@ Building on the proven v1.0 foundation, v1.1 adds structured specification templ
 3. User can preview generated GSD XML in readable format before committing to download
 4. System blocks GSD export attempts for incomplete specifications and displays clear completion requirements
 
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD
+
 ## Progress
 
 | Phase | Goal | Status | Success Criteria | Requirements |
 |-------|------|--------|------------------|--------------|
-| 5 - Specification Foundation | Users can create and manage structured specifications | Pending | 4 criteria | SPEC-01, SPEC-02, SPEC-04 |
+| 5 - Specification Foundation | Users can create and manage structured specifications | Planned | 4 criteria | SPEC-01, SPEC-02, SPEC-04 |
 | 6 - Export Engine | Users can export specifications as GSD XML | Pending | 4 criteria | EXPORT-01, EXPORT-02, EXPORT-05 |
 | 7 - Validation & Preview | Users have quality gates for export | Pending | 4 criteria | SPEC-03, SPEC-05, EXPORT-03, EXPORT-04 |
 
-**Next:** Plan Phase 5 to begin implementation
+**Next:** Execute Phase 5 plans
 
 ---
 *Generated: 2026-02-27*
