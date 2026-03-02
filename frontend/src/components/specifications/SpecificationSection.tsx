@@ -39,7 +39,7 @@ export interface SpecificationSectionData {
 
 export interface SpecificationSectionProps {
   sectionName: string;
-  control: Control<Record<string, any>>;
+  control: Control<any>;
   sectionData?: SpecificationSectionData;
   onStatusChange?: (status: SectionStatus) => void;
   workItemId?: string;
