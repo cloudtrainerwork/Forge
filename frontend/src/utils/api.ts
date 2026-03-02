@@ -357,33 +357,49 @@ export async function saveDependencies(screenId: string, edges: Edge[]): Promise
 
     const errors: APIError[] = [];
 
-    // Save new dependencies using the enhanced API calls
+    // Save new dependencies using the enhanced API calls with retry logic
     for (const dependency of dependencies) {
-      try {
-        await apiCall('/dependencies', {
-          method: 'POST',
-          body: JSON.stringify({
-            from: dependency.source,
-            to: dependency.target,
-            type: dependency.type || 'requires',
-          }),
-        });
-        console.log(`Created dependency: ${dependency.source} -> ${dependency.target}`);
-      } catch (error) {
-        if (error instanceof APIError) {
-          // For 409 (conflict) errors, dependency might already exist - that's fine
-          // For 400 errors, nodes might not exist yet - log but don't fail
-          if (error.status === 409) {
-            console.log(`Dependency already exists: ${dependency.source} -> ${dependency.target}`);
-          } else if (error.status === 400) {
-            console.warn(`Could not create dependency ${dependency.source} -> ${dependency.target}: Nodes may not exist in backend yet`);
-            // Don't add to errors for 400 as nodes might be created later
+      let retryCount = 0;
+      let success = false;
+
+      while (!success && retryCount < 3) {
+        try {
+          await apiCall('/dependencies', {
+            method: 'POST',
+            body: JSON.stringify({
+              from: dependency.source,
+              to: dependency.target,
+              type: dependency.type || 'requires',
+            }),
+          });
+          console.log(`Created dependency: ${dependency.source} -> ${dependency.target}`);
+          success = true;
+        } catch (error) {
+          if (error instanceof APIError) {
+            // For 409 (conflict) errors, dependency might already exist - that's fine
+            if (error.status === 409) {
+              console.log(`Dependency already exists: ${dependency.source} -> ${dependency.target}`);
+              success = true;
+            } else if (error.status === 400) {
+              retryCount++;
+              if (retryCount < 3) {
+                console.warn(`Retry ${retryCount}/3: Could not create dependency ${dependency.source} -> ${dependency.target}`);
+                // Wait a bit before retrying
+                await new Promise(resolve => setTimeout(resolve, 1000));
+              } else {
+                console.warn(`Failed after 3 attempts: Could not create dependency ${dependency.source} -> ${dependency.target}: Nodes may not exist in backend`);
+                // Don't add to errors for 400 as nodes might be created later
+                success = true; // Don't retry anymore
+              }
+            } else {
+              errors.push(error);
+              console.error(`Failed to create dependency ${dependency.source} -> ${dependency.target}:`, error.message);
+              success = true; // Don't retry for other errors
+            }
           } else {
-            errors.push(error);
-            console.error(`Failed to create dependency ${dependency.source} -> ${dependency.target}:`, error.message);
+            errors.push(new APIError(`Failed to create dependency ${dependency.source} -> ${dependency.target}: ${error}`));
+            success = true; // Don't retry for non-API errors
           }
-        } else {
-          errors.push(new APIError(`Failed to create dependency ${dependency.source} -> ${dependency.target}: ${error}`));
         }
       }
     }
@@ -487,7 +503,12 @@ export async function saveScreenData(
     // Save work items first, then dependencies
     // This ensures nodes exist before creating dependencies between them
     await saveWorkItems(screenId, nodes);
-    await saveDependencies(screenId, edges);
+
+    // Small delay to ensure work items are fully persisted before creating dependencies
+    if (edges.length > 0) {
+      await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay
+      await saveDependencies(screenId, edges);
+    }
   } catch (error) {
     console.error('Error saving screen data:', error);
     throw error;
@@ -510,4 +531,333 @@ export async function loadScreenData(screenId: string): Promise<{
     console.error('Error loading screen data:', error);
     return { nodes: [], edges: [] };
   }
+}
+
+// =====================================
+// SPECIFICATION API FUNCTIONS
+// =====================================
+
+export interface SpecificationSection {
+  content: string;
+  status: 'empty' | 'draft' | 'review' | 'complete';
+  wordCount: number;
+  lastUpdated: string;
+}
+
+export interface SpecificationTemplate {
+  id: string;
+  workItemId: string;
+  sections: {
+    requirements: SpecificationSection;
+    design: SpecificationSection;
+    frontend: SpecificationSection;
+    backend: SpecificationSection;
+    integration: SpecificationSection;
+    test: SpecificationSection;
+  };
+  overallStatus: 'empty' | 'draft' | 'review' | 'complete';
+  completionPercentage: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SpecificationValidationResult {
+  isValid: boolean;
+  completionPercentage: number;
+  overallStatus: 'empty' | 'draft' | 'review' | 'complete';
+  sectionValidation: {
+    [sectionName: string]: {
+      isValid: boolean;
+      status: 'empty' | 'draft' | 'review' | 'complete';
+      wordCount: number;
+      issues: string[];
+    };
+  };
+  recommendations: string[];
+}
+
+// Request deduplication to prevent duplicate API calls
+const activeRequests = new Map<string, Promise<any>>();
+
+function createRequestKey(method: string, url: string, body?: any): string {
+  return `${method}:${url}:${body ? JSON.stringify(body) : ''}`;
+}
+
+async function deduplicatedApiCall<T>(
+  endpoint: string,
+  options: RequestInit = {},
+  retryCount: number = 0
+): Promise<T> {
+  const requestKey = createRequestKey(options.method || 'GET', endpoint, options.body);
+
+  // Check if we have an active request for this exact call
+  if (activeRequests.has(requestKey)) {
+    console.log(`Deduplicating API call: ${requestKey}`);
+    return activeRequests.get(requestKey) as Promise<T>;
+  }
+
+  // Create and store the promise
+  const requestPromise = apiCall<T>(endpoint, options, retryCount);
+  activeRequests.set(requestKey, requestPromise);
+
+  try {
+    const result = await requestPromise;
+    return result;
+  } finally {
+    // Clean up after request completes
+    activeRequests.delete(requestKey);
+  }
+}
+
+/**
+ * Fetch specification data for a work item
+ * @param workItemId - The work item identifier
+ * @returns Promise<SpecificationTemplate> - The specification data
+ */
+export async function getSpecification(workItemId: string): Promise<SpecificationTemplate> {
+  if (!workItemId) {
+    throw new ValidationError('Work item ID is required');
+  }
+
+  try {
+    const result = await deduplicatedApiCall<{ data: SpecificationTemplate }>(
+      `/specifications/${workItemId}`
+    );
+
+    if (!result.data) {
+      throw new APIError('No specification data returned', 404, 'NOT_FOUND_ERROR');
+    }
+
+    return result.data;
+  } catch (error) {
+    if (error instanceof APIError) {
+      // If specification doesn't exist, return empty template
+      if (error.status === 404) {
+        return createEmptySpecificationTemplate(workItemId);
+      }
+      throw error;
+    }
+    throw new APIError(`Failed to get specification: ${error}`);
+  }
+}
+
+/**
+ * Update entire specification for a work item
+ * @param workItemId - The work item identifier
+ * @param specification - The complete specification data
+ * @returns Promise<SpecificationTemplate> - The updated specification
+ */
+export async function updateSpecification(
+  workItemId: string,
+  specification: SpecificationTemplate
+): Promise<SpecificationTemplate> {
+  if (!workItemId) {
+    throw new ValidationError('Work item ID is required');
+  }
+
+  if (!specification) {
+    throw new ValidationError('Specification data is required');
+  }
+
+  try {
+    // Update the updatedAt timestamp
+    const updatedSpec = {
+      ...specification,
+      updatedAt: new Date().toISOString()
+    };
+
+    const result = await deduplicatedApiCall<{ data: SpecificationTemplate }>(
+      `/specifications/${workItemId}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(updatedSpec)
+      }
+    );
+
+    if (!result.data) {
+      throw new APIError('No specification data returned after update');
+    }
+
+    return result.data;
+  } catch (error) {
+    if (error instanceof APIError) {
+      throw error;
+    }
+    throw new APIError(`Failed to update specification: ${error}`);
+  }
+}
+
+/**
+ * Update a specific section of a specification
+ * @param workItemId - The work item identifier
+ * @param sectionName - The section name (requirements, design, frontend, backend, integration, test)
+ * @param content - The section content and metadata
+ * @returns Promise<SpecificationSection> - The updated section
+ */
+export async function updateSpecificationSection(
+  workItemId: string,
+  sectionName: string,
+  content: SpecificationSection
+): Promise<SpecificationSection> {
+  if (!workItemId) {
+    throw new ValidationError('Work item ID is required');
+  }
+
+  if (!sectionName) {
+    throw new ValidationError('Section name is required');
+  }
+
+  if (!content) {
+    throw new ValidationError('Section content is required');
+  }
+
+  // Validate section name
+  const validSections = ['requirements', 'design', 'frontend', 'backend', 'integration', 'test'];
+  if (!validSections.includes(sectionName.toLowerCase())) {
+    throw new ValidationError(`Invalid section name: ${sectionName}. Must be one of: ${validSections.join(', ')}`);
+  }
+
+  try {
+    // Update the lastUpdated timestamp
+    const updatedContent = {
+      ...content,
+      lastUpdated: new Date().toISOString()
+    };
+
+    const result = await deduplicatedApiCall<{ data: SpecificationSection }>(
+      `/specifications/${workItemId}/sections/${sectionName.toLowerCase()}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(updatedContent)
+      }
+    );
+
+    if (!result.data) {
+      throw new APIError('No section data returned after update');
+    }
+
+    return result.data;
+  } catch (error) {
+    if (error instanceof APIError) {
+      throw error;
+    }
+    throw new APIError(`Failed to update specification section: ${error}`);
+  }
+}
+
+/**
+ * Validate a specification and get completion status
+ * @param workItemId - The work item identifier
+ * @returns Promise<SpecificationValidationResult> - Validation results and completion status
+ */
+export async function validateSpecification(workItemId: string): Promise<SpecificationValidationResult> {
+  if (!workItemId) {
+    throw new ValidationError('Work item ID is required');
+  }
+
+  try {
+    const result = await deduplicatedApiCall<{ data: SpecificationValidationResult }>(
+      `/specifications/${workItemId}/validate`
+    );
+
+    if (!result.data) {
+      throw new APIError('No validation data returned');
+    }
+
+    return result.data;
+  } catch (error) {
+    if (error instanceof APIError) {
+      // If specification doesn't exist, return empty validation
+      if (error.status === 404) {
+        return createEmptyValidationResult();
+      }
+      throw error;
+    }
+    throw new APIError(`Failed to validate specification: ${error}`);
+  }
+}
+
+/**
+ * Delete a specification for a work item
+ * @param workItemId - The work item identifier
+ * @returns Promise<void>
+ */
+export async function deleteSpecification(workItemId: string): Promise<void> {
+  if (!workItemId) {
+    throw new ValidationError('Work item ID is required');
+  }
+
+  try {
+    await deduplicatedApiCall<void>(
+      `/specifications/${workItemId}`,
+      {
+        method: 'DELETE'
+      }
+    );
+  } catch (error) {
+    if (error instanceof APIError) {
+      // If specification doesn't exist, that's fine for deletion
+      if (error.status === 404) {
+        return;
+      }
+      throw error;
+    }
+    throw new APIError(`Failed to delete specification: ${error}`);
+  }
+}
+
+// Helper function to create empty specification template
+function createEmptySpecificationTemplate(workItemId: string): SpecificationTemplate {
+  const now = new Date().toISOString();
+
+  const emptySection: SpecificationSection = {
+    content: '',
+    status: 'empty',
+    wordCount: 0,
+    lastUpdated: now
+  };
+
+  return {
+    id: `spec-${workItemId}`,
+    workItemId,
+    sections: {
+      requirements: { ...emptySection },
+      design: { ...emptySection },
+      frontend: { ...emptySection },
+      backend: { ...emptySection },
+      integration: { ...emptySection },
+      test: { ...emptySection }
+    },
+    overallStatus: 'empty',
+    completionPercentage: 0,
+    createdAt: now,
+    updatedAt: now
+  };
+}
+
+// Helper function to create empty validation result
+function createEmptyValidationResult(): SpecificationValidationResult {
+  const sections = ['requirements', 'design', 'frontend', 'backend', 'integration', 'test'];
+  const sectionValidation: { [key: string]: any } = {};
+
+  sections.forEach(section => {
+    sectionValidation[section] = {
+      isValid: false,
+      status: 'empty',
+      wordCount: 0,
+      issues: ['Section is empty']
+    };
+  });
+
+  return {
+    isValid: false,
+    completionPercentage: 0,
+    overallStatus: 'empty',
+    sectionValidation,
+    recommendations: [
+      'Add content to specification sections',
+      'Start with requirements section to define project scope',
+      'Include design specifications for technical implementation'
+    ]
+  };
 }
