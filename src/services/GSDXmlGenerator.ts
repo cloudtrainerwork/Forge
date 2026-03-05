@@ -25,9 +25,14 @@ export class GSDXmlGenerator {
    */
   private precompileTemplate(): void {
     try {
-      const templatePath = path.join(__dirname, '../templates/gsd-plan.hbs');
+      // ES module compatible path resolution
+      const currentFileUrl = new URL(import.meta.url);
+      const currentDir = path.dirname(currentFileUrl.pathname);
+      const templatePath = path.join(currentDir, '../templates/gsd-plan.hbs');
       const templateContent = fs.readFileSync(templatePath, 'utf-8');
-      this.compiledTemplate = Handlebars.compile(templateContent);
+      // Handle both CommonJS and ES module exports
+      const compile = Handlebars.compile || (Handlebars as any).default?.compile || Handlebars;
+      this.compiledTemplate = typeof compile === 'function' ? compile(templateContent) : compile.compile(templateContent);
     } catch (error) {
       throw new Error(`Failed to compile GSD template: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
