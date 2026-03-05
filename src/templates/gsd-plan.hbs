@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plan id="{{{planId}}}" version="1.0" xmlns="http://gsd.dev/schema/plan">
+  <metadata>
+    <title>{{{title}}}</title>
+    <created>{{{timestamp}}}</created>
+    <source>FORGE Specification Export</source>
+    <atomicity>{{atomicity}}</atomicity>
+  </metadata>
+
+  <waves>
+    {{#each waves}}
+    <wave id="wave-{{@index}}" parallel="{{parallel}}">
+      {{#if dependencies.length}}
+      <dependencies>
+        {{#each dependencies}}
+        <depends-on>{{this}}</depends-on>
+        {{/each}}
+      </dependencies>
+      {{/if}}
+
+      {{#each tasks}}
+      <task type="{{type}}" id="{{id}}">
+        <name>{{{name}}}</name>
+        <files>{{{files}}}</files>
+        <description>{{{description}}}</description>
+
+        {{#if verification}}
+        <verify>
+          <automated>{{{verification.automated}}}</automated>
+          {{#if verification.manual}}
+          <manual>{{{verification.manual}}}</manual>
+          {{/if}}
+        </verify>
+        {{/if}}
+
+        {{#if done}}
+        <done>{{{done}}}</done>
+        {{/if}}
+      </task>
+      {{/each}}
+    </wave>
+    {{/each}}
+  </waves>
+</plan>
