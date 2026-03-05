@@ -28,10 +28,11 @@ Building on the proven v1.0 foundation, v1.1 adds structured specification templ
 3. User can save specification changes without affecting canvas performance or visual state
 4. System stores specification data in PostgreSQL JSONB fields separate from Neo4j graph structure
 
-**Plans:** 2 plans
+**Plans:** 3 plans
 Plans:
 - [ ] 05-01-PLAN.md — Create specification schema and service layer foundation
-- [ ] 05-02-PLAN.md — Build specification editing UI with structured text input
+- [ ] 05-02a-PLAN.md — Build core specification UI components and API functions
+- [ ] 05-02b-PLAN.md — Create specification state management and main editing interface
 
 ---
 
