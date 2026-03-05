@@ -4,8 +4,10 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import { workItemRoutes } from './routes/workItems.js';
 import { readinessRoutes } from './routes/readiness.js';
+import exportsRoutes from './routes/exports.js';
 import groupingRoutes from './routes/grouping.js';
 import sprintsRoutes from './routes/sprints.js';
+import specificationsRoutes from './routes/specifications.js';
 import { ServiceFactory } from '../factories/ServiceFactory.js';
 
 /**
@@ -75,11 +77,17 @@ export class ApiServer {
     // Mount readiness routes directly for convenience
     apiRouter.use('/', readinessRoutes(this.serviceFactory));
 
+    // Exports routes with service injection
+    apiRouter.use('/exports', exportsRoutes(this.serviceFactory));
+
     // Grouping routes
     apiRouter.use('/', groupingRoutes);
 
     // Sprint routes
     apiRouter.use('/', sprintsRoutes);
+
+    // Specifications routes with service injection
+    apiRouter.use('/specifications', specificationsRoutes(this.serviceFactory));
 
     // Mount API router
     this.app.use('/api/v1', apiRouter);
@@ -94,8 +102,10 @@ export class ApiServer {
           health: '/health',
           workItems: '/api/v1/work-items',
           readiness: '/api/v1/readiness',
+          exports: '/api/v1/exports',
           groups: '/api/v1/groups',
-          sprints: '/api/v1/sprints'
+          sprints: '/api/v1/sprints',
+          specifications: '/api/v1/specifications'
         }
       });
     });
