@@ -53,12 +53,14 @@ Plans:
 3. Exported XML follows wave-based execution format compatible with GSD workflow orchestrators
 4. Export process completes within 5 seconds for individual work items without blocking UI
 
-**Plans:** 3 plans
+**Plans:** 5 plans
 
 Plans:
-- [ ] 06-01-PLAN.md — Create GSD XML template engine with Handlebars and domain entities
-- [ ] 06-02-PLAN.md — Build ExportService with IoC integration and performance guarantees
-- [ ] 06-03-PLAN.md — Add export API endpoints with file download capabilities
+- [x] 06-01-PLAN.md — Create GSD XML template engine with Handlebars and domain entities
+- [x] 06-02-PLAN.md — Build ExportService with IoC integration and performance guarantees
+- [x] 06-03-PLAN.md — Add export API endpoints with file download capabilities
+- [ ] 06-04-PLAN.md — Fix domain entity TypeScript compilation errors for export functionality
+- [ ] 06-05-PLAN.md — Fix service layer compilation errors blocking export engine server functionality
 
 ---
 
