@@ -10,9 +10,12 @@ import { AuditTrailService } from '../services/AuditTrailService.js';
 import { GroupingService } from '../services/GroupingService.js';
 import { SprintService } from '../services/SprintService.js';
 import { SpecificationService } from '../services/SpecificationService.js';
+import { ExportService } from '../services/ExportService.js';
+import { GSDXmlGenerator } from '../services/GSDXmlGenerator.js';
 import type { IWorkItemRepository } from '../adapters/IWorkItemRepository.js';
 import type { IGraphRepository } from '../adapters/IGraphRepository.js';
 import type { ISpecificationService } from '../adapters/ISpecificationService.js';
+import type { IExportService } from '../adapters/IExportService.js';
 
 /**
  * IoC container configuration using inversify
@@ -78,6 +81,14 @@ export class ServiceFactory {
       .to(GroupingService)
       .inSingletonScope();
 
+    this.container.bind<GSDXmlGenerator>('GSDXmlGenerator')
+      .to(GSDXmlGenerator)
+      .inSingletonScope();
+
+    this.container.bind<IExportService>('IExportService')
+      .to(ExportService)
+      .inSingletonScope();
+
     this.container.bind<ISpecificationService>('ISpecificationService')
       .to(SpecificationService)
       .inSingletonScope();
@@ -138,6 +149,13 @@ export class ServiceFactory {
   }
 
   /**
+   * Get ExportService instance
+   */
+  getExportService(): IExportService {
+    return this.getService<IExportService>('IExportService');
+  }
+
+  /**
    * Get SpecificationService instance
    */
   getSpecificationService(): ISpecificationService {
@@ -154,6 +172,7 @@ export class ServiceFactory {
     readinessRepository: boolean;
     workItemService: boolean;
     readinessService: boolean;
+    exportService: boolean;
     specificationService: boolean;
     auditTrailService: boolean;
     overall: boolean;
@@ -165,6 +184,7 @@ export class ServiceFactory {
       readinessRepository: false,
       workItemService: false,
       readinessService: false,
+      exportService: false,
       specificationService: false,
       auditTrailService: false,
       overall: false
@@ -195,6 +215,9 @@ export class ServiceFactory {
       const readinessService = this.getService<ReadinessService>('ReadinessService');
       result.readinessService = true; // ReadinessService doesn't have healthCheck method
 
+      const exportService = this.getService<IExportService>('IExportService');
+      result.exportService = true; // ExportService doesn't have healthCheck method
+
       const specificationService = this.getService<ISpecificationService>('ISpecificationService');
       result.specificationService = true; // SpecificationService doesn't have healthCheck method
 
@@ -207,6 +230,7 @@ export class ServiceFactory {
                       result.readinessRepository &&
                       result.workItemService &&
                       result.readinessService &&
+                      result.exportService &&
                       result.specificationService &&
                       result.auditTrailService;
 
