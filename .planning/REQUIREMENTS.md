@@ -18,7 +18,7 @@ Requirements for v1.1 Agentic Export milestone. Each maps to roadmap phases.
 ### Export System
 
 - [ ] **EXPORT-01**: User can export individual work item specifications to GSD XML format
-- [ ] **EXPORT-02**: System generates atomic GSD plans with maximum 3 tasks per work item
+- [x] **EXPORT-02**: System generates atomic GSD plans with maximum 3 tasks per work item
 - [ ] **EXPORT-03**: User can preview GSD export before downloading
 - [ ] **EXPORT-04**: System validates specification completeness before GSD export
 - [ ] **EXPORT-05**: User receives GSD XML file formatted for wave-based execution
@@ -71,7 +71,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SPEC-04 | Phase 5 | Pending |
 | SPEC-05 | Phase 7 | Pending |
 | EXPORT-01 | Phase 6 | Pending |
-| EXPORT-02 | Phase 6 | Pending |
+| EXPORT-02 | Phase 6 | Complete |
 | EXPORT-03 | Phase 7 | Pending |
 | EXPORT-04 | Phase 7 | Pending |
 | EXPORT-05 | Phase 6 | Pending |
