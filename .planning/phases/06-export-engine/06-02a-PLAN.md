@@ -2,14 +2,14 @@
 phase: 06-export-engine
 plan: 02a
 type: execute
-wave: 2
-depends_on: [06-01]
+wave: 3
+depends_on: [06-01b]
 files_modified: [
   "src/adapters/IExportService.ts",
   "src/services/ExportService.ts"
 ]
 autonomous: true
-requirements: [EXPORT-01, EXPORT-05]
+requirements: [EXPORT-01, EXPORT-02, EXPORT-05]
 user_setup: []
 
 must_haves:
@@ -54,7 +54,7 @@ Output: Core export service ready for IoC integration and audit enhancement
 @.planning/phases/06-export-engine/06-RESEARCH.md
 
 # Plan Dependencies
-@.planning/phases/06-export-engine/06-01-SUMMARY.md
+@.planning/phases/06-export-engine/06-01b-SUMMARY.md
 
 # Existing Service Patterns
 @src/adapters/ISpecificationService.ts
