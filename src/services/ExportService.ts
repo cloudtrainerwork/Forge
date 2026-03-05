@@ -1,6 +1,7 @@
 import { injectable, inject } from 'inversify';
 import type { IExportService, ExportResult } from '../adapters/IExportService.js';
 import type { ISpecificationService } from '../adapters/ISpecificationService.js';
+import type { AuditTrailService } from './AuditTrailService.js';
 import type { GSDXmlGenerator } from './GSDXmlGenerator.js';
 
 /**
@@ -14,6 +15,7 @@ import type { GSDXmlGenerator } from './GSDXmlGenerator.js';
 export class ExportService implements IExportService {
   constructor(
     @inject('ISpecificationService') private specificationService: ISpecificationService,
+    @inject('AuditTrailService') private auditTrailService: AuditTrailService,
     @inject('GSDXmlGenerator') private gsdXmlGenerator: GSDXmlGenerator
   ) {}
 
@@ -21,25 +23,71 @@ export class ExportService implements IExportService {
    * Export work item specification to GSD XML format
    *
    * Transforms a work item's specification into GSD-compatible XML for
-   * use with agentic execution systems. Includes validation and error handling.
+   * use with agentic execution systems. Includes validation, error handling,
+   * audit logging, and performance monitoring.
    */
   async exportWorkItemToGSD(workItemId: string): Promise<ExportResult> {
+    const startTime = Date.now();
+    const operationId = `export-${workItemId}-${Date.now()}`;
+
     try {
+      // Log export operation start
+      this.auditTrailService.emit('WORK_ITEM_UPDATED', {
+        workItemId,
+        type: 'export_started',
+        operationId,
+        timestamp: new Date().toISOString()
+      });
+
       // Retrieve the specification for the work item
       const specification = await this.specificationService.getSpecification(workItemId);
       if (!specification) {
+        // Log failure and throw
+        this.auditTrailService.emit('WORK_ITEM_UPDATED', {
+          workItemId,
+          type: 'export_failed',
+          operationId,
+          error: 'Work item not found',
+          duration: Date.now() - startTime,
+          timestamp: new Date().toISOString()
+        });
         throw new Error(`Work item ${workItemId} not found`);
       }
 
       // Validate specification has sufficient content for export
       if (!specification.hasContent()) {
+        // Log validation failure
+        this.auditTrailService.emit('WORK_ITEM_UPDATED', {
+          workItemId,
+          type: 'export_failed',
+          operationId,
+          error: 'Empty specification',
+          duration: Date.now() - startTime,
+          timestamp: new Date().toISOString()
+        });
         throw new Error(`Cannot export empty specification for work item ${workItemId}. Please add content to at least one section before exporting.`);
       }
 
       // Check if specification meets minimum completeness threshold
       const completionPercentage = specification.getCompletionPercentage();
       if (completionPercentage < 10) {
+        // Log validation failure
+        this.auditTrailService.emit('WORK_ITEM_UPDATED', {
+          workItemId,
+          type: 'export_failed',
+          operationId,
+          error: 'Specification too incomplete',
+          completionPercentage,
+          duration: Date.now() - startTime,
+          timestamp: new Date().toISOString()
+        });
         throw new Error(`Specification for work item ${workItemId} is too incomplete for export (${completionPercentage}% complete). Please add more content before exporting.`);
+      }
+
+      // Check for 5-second performance requirement before continuing
+      const currentDuration = Date.now() - startTime;
+      if (currentDuration > 4000) {
+        console.warn(`Export operation ${operationId} approaching 5-second limit at validation phase: ${currentDuration}ms`);
       }
 
       // Generate GSD plan from specification
@@ -48,12 +96,39 @@ export class ExportService implements IExportService {
       // Render the plan to XML
       const xmlContent = this.gsdXmlGenerator.renderGSDXml(gsdPlan);
 
+      // Check performance after XML generation
+      const xmlGenerationTime = Date.now() - startTime;
+      if (xmlGenerationTime > 4500) {
+        console.warn(`Export operation ${operationId} approaching 5-second limit at XML generation: ${xmlGenerationTime}ms`);
+      }
+
       // Generate filename with timestamp
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const filename = `forge-workitem-${workItemId}-${timestamp}.xml`;
 
       // Convert XML string to Buffer for file download
       const buffer = Buffer.from(xmlContent, 'utf-8');
+
+      const finalDuration = Date.now() - startTime;
+
+      // Warn if approaching 5-second limit
+      if (finalDuration > 4800) {
+        console.warn(`Export operation ${operationId} very close to 5-second limit: ${finalDuration}ms`);
+      }
+
+      // Enforce 5-second performance requirement
+      if (finalDuration > 5000) {
+        // Log performance violation
+        this.auditTrailService.emit('WORK_ITEM_UPDATED', {
+          workItemId,
+          type: 'export_timeout',
+          operationId,
+          duration: finalDuration,
+          fileSize: buffer.length,
+          timestamp: new Date().toISOString()
+        });
+        throw new Error(`Export operation exceeded 5-second performance requirement (${finalDuration}ms). Please try again or contact support.`);
+      }
 
       // Create export result with metadata
       const exportResult: ExportResult = {
@@ -69,12 +144,37 @@ export class ExportService implements IExportService {
         }
       };
 
+      // Log successful export with full metadata
+      this.auditTrailService.emit('WORK_ITEM_UPDATED', {
+        workItemId,
+        type: 'export_completed',
+        operationId,
+        duration: finalDuration,
+        fileSize: buffer.length,
+        filename,
+        completionPercentage,
+        specificationVersion: specification.templateVersion,
+        timestamp: new Date().toISOString()
+      });
+
       return exportResult;
     } catch (error) {
+      const finalDuration = Date.now() - startTime;
+
+      // Log error with audit trail
+      this.auditTrailService.emit('WORK_ITEM_UPDATED', {
+        workItemId,
+        type: 'export_error',
+        operationId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        duration: finalDuration,
+        timestamp: new Date().toISOString()
+      });
+
       // Follow error message patterns from SpecificationService
       if (error instanceof Error) {
         // Re-throw known errors with context
-        if (error.message.includes('not found') || error.message.includes('empty specification') || error.message.includes('too incomplete')) {
+        if (error.message.includes('not found') || error.message.includes('empty specification') || error.message.includes('too incomplete') || error.message.includes('exceeded 5-second')) {
           throw error;
         }
         // Wrap XML generation errors

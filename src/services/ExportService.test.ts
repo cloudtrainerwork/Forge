@@ -16,6 +16,22 @@ class MockSpecificationService {
   }
 }
 
+class MockAuditTrailService {
+  private events: Array<{ type: string; data: any }> = [];
+
+  emit(type: string, data: any): void {
+    this.events.push({ type, data });
+  }
+
+  getEvents(): Array<{ type: string; data: any }> {
+    return [...this.events];
+  }
+
+  clearEvents(): void {
+    this.events = [];
+  }
+}
+
 class MockGSDXmlGenerator {
   generateGSDPlan(spec: SpecificationTemplate, workItemId: string): GSDPlan {
     // Create a simple mock plan
@@ -37,16 +53,18 @@ class MockGSDXmlGenerator {
 describe('ExportService', () => {
   let exportService: ExportService;
   let mockSpecService: MockSpecificationService;
+  let mockAuditService: MockAuditTrailService;
   let mockXmlGenerator: MockGSDXmlGenerator;
 
   beforeEach(() => {
     mockSpecService = new MockSpecificationService();
+    mockAuditService = new MockAuditTrailService();
     mockXmlGenerator = new MockGSDXmlGenerator();
 
     // Create ExportService with mocked dependencies
     exportService = new (class extends ExportService {
       constructor() {
-        super(mockSpecService as any, mockXmlGenerator as any);
+        super(mockSpecService as any, mockAuditService as any, mockXmlGenerator as any);
       }
     })();
   });
@@ -75,6 +93,33 @@ describe('ExportService', () => {
       const xmlContent = result.buffer.toString('utf-8');
       expect(xmlContent).to.include('<?xml version="1.0"');
       expect(xmlContent).to.include('gsd-plan');
+    });
+
+    it('logs audit trail for successful export', async () => {
+      // Arrange: Create a specification with content
+      const spec = new SpecificationTemplate();
+      spec.backend = new SpecificationSection('API implementation details', 'complete' as any);
+      mockSpecService.setSpecification('test-audit-item', spec);
+
+      // Act: Export the work item
+      await exportService.exportWorkItemToGSD('test-audit-item');
+
+      // Assert: Verify audit events were logged
+      const events = mockAuditService.getEvents();
+      expect(events).to.have.length.greaterThan(0);
+
+      // Check for export started event
+      const startEvent = events.find(e => e.data.type === 'export_started');
+      expect(startEvent).to.exist;
+      expect(startEvent.data.workItemId).to.equal('test-audit-item');
+
+      // Check for export completed event
+      const completedEvent = events.find(e => e.data.type === 'export_completed');
+      expect(completedEvent).to.exist;
+      expect(completedEvent.data.workItemId).to.equal('test-audit-item');
+      expect(completedEvent.data).to.have.property('duration');
+      expect(completedEvent.data).to.have.property('fileSize');
+      expect(completedEvent.data).to.have.property('filename');
     });
 
     it('throws error for non-existent work item', async () => {
