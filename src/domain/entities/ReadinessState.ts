@@ -16,6 +16,11 @@ export enum ReadinessDimension {
 export type ReadinessDimensionKey = 'requirements' | 'design' | 'frontend' | 'backend' | 'integration' | 'test';
 
 /**
+ * Type mapping dimension keys to their percentage property keys
+ */
+type DimensionPercentageKey<T extends ReadinessDimensionKey> = `${T}Percentage`;
+
+/**
  * ReadinessState enforces the 6-dimensional readiness structure
  * Each dimension tracks progress and completion state with both discrete states and percentage
  * Required for determining if work items are ready for execution
@@ -316,7 +321,7 @@ export class ReadinessState {
       const avgPercentage = Math.round(totalPercentage / childStates.length);
 
       // Set percentage
-      aggregated[`${dimension}Percentage` as keyof ReadinessState] = avgPercentage as any;
+      (aggregated as any)[`${dimension}Percentage`] = avgPercentage;
 
       // Calculate state from percentage
       if (avgPercentage === 0) {
