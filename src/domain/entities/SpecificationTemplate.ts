@@ -380,12 +380,42 @@ export class SpecificationTemplate {
  */
 export const SpecificationTemplateSchema = z.object({
   templateVersion: z.string().default('1.0'),
-  requirements: SpecificationSectionSchema.default({}),
-  design: SpecificationSectionSchema.default({}),
-  frontend: SpecificationSectionSchema.default({}),
-  backend: SpecificationSectionSchema.default({}),
-  integration: SpecificationSectionSchema.default({}),
-  test: SpecificationSectionSchema.default({}),
+  requirements: SpecificationSectionSchema.default(() => ({
+    content: '',
+    status: 'empty' as const,
+    lastUpdated: new Date().toISOString(),
+    wordCount: 0
+  })),
+  design: SpecificationSectionSchema.default(() => ({
+    content: '',
+    status: 'empty' as const,
+    lastUpdated: new Date().toISOString(),
+    wordCount: 0
+  })),
+  frontend: SpecificationSectionSchema.default(() => ({
+    content: '',
+    status: 'empty' as const,
+    lastUpdated: new Date().toISOString(),
+    wordCount: 0
+  })),
+  backend: SpecificationSectionSchema.default(() => ({
+    content: '',
+    status: 'empty' as const,
+    lastUpdated: new Date().toISOString(),
+    wordCount: 0
+  })),
+  integration: SpecificationSectionSchema.default(() => ({
+    content: '',
+    status: 'empty' as const,
+    lastUpdated: new Date().toISOString(),
+    wordCount: 0
+  })),
+  test: SpecificationSectionSchema.default(() => ({
+    content: '',
+    status: 'empty' as const,
+    lastUpdated: new Date().toISOString(),
+    wordCount: 0
+  })),
   createdAt: z.string().datetime().or(z.date()).transform(val =>
     typeof val === 'string' ? val : val.toISOString()
   ).default(() => new Date().toISOString()),
