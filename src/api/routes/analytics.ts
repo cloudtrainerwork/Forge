@@ -111,13 +111,17 @@ export function analyticsRoutes(serviceFactory: ServiceFactory): Router {
     try {
       return container.get<AnalyticsService>('AnalyticsService');
     } catch {
-      // Fallback: create service directly with service factory
-      return new AnalyticsService(
-        serviceFactory.getWorkItemRepository() as any,
-        serviceFactory.getReadinessService() as any,
-        serviceFactory.getSprintService() as any,
-        serviceFactory.getGroupingService() as any
-      );
+      // TODO: Implement service integrations after full service registration
+      // Analytics functionality temporarily disabled until service layer is complete
+      throw new Error('AnalyticsService not available - service registration incomplete');
+
+      // Fallback would be:
+      // return new AnalyticsService(
+      //   serviceFactory.getService<IWorkItemRepository>('IWorkItemRepository'),
+      //   serviceFactory.getReadinessService(),
+      //   serviceFactory.getService<SprintService>('SprintService'),
+      //   serviceFactory.getService<GroupingService>('GroupingService')
+      // );
     }
   };
 
