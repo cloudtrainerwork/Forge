@@ -1,6 +1,7 @@
 import { IsString, IsNotEmpty, IsOptional, IsArray, ValidateNested, IsNumber, Min, Max } from 'class-validator';
 import { Expose, Type } from 'class-transformer';
-import { ReadinessDimension, ReadinessDimensionKey } from './ReadinessState.js';
+import { ReadinessDimension } from './ReadinessState.js';
+import type { ReadinessDimensionKey } from './ReadinessState.js';
 
 /**
  * Configuration for a custom readiness state
