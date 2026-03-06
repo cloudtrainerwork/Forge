@@ -2,14 +2,14 @@
 phase: 06-export-engine
 plan: 02b
 type: execute
-wave: 4
+wave: 5
 depends_on: [06-02a]
 files_modified: [
   "src/services/ExportService.ts",
   "src/factories/ServiceFactory.ts"
 ]
 autonomous: true
-requirements: [EXPORT-02, EXPORT-05]
+requirements: []
 user_setup: []
 
 must_haves:

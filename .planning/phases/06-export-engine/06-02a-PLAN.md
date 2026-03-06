@@ -2,14 +2,14 @@
 phase: 06-export-engine
 plan: 02a
 type: execute
-wave: 3
+wave: 4
 depends_on: [06-01b]
 files_modified: [
   "src/adapters/IExportService.ts",
   "src/services/ExportService.ts"
 ]
 autonomous: true
-requirements: [EXPORT-01, EXPORT-02, EXPORT-05]
+requirements: [EXPORT-01]
 user_setup: []
 
 must_haves:

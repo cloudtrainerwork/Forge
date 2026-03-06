@@ -2,14 +2,14 @@
 phase: 06-export-engine
 plan: 01b
 type: execute
-wave: 2
+wave: 3
 depends_on: [06-01]
 files_modified: [
   "src/templates/gsd-plan.hbs",
   "src/services/GSDXmlGenerator.ts"
 ]
 autonomous: true
-requirements: [EXPORT-01, EXPORT-05]
+requirements: [EXPORT-02]
 user_setup: []
 
 must_haves:
