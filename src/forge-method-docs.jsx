@@ -85,7 +85,7 @@ function Table({ headers, rows }) {
 function WelcomePage() {
   return (<>
     <H1>The FORGE Method</H1>
-    <P><strong style={{ color: COLORS.accent }}>Functional Orchestration for Release-Grade Execution</strong></P>
+    <P><strong style={{ color: COLORS.accent, fontSize: 18, letterSpacing: "0.02em" }}><span style={{ fontSize: 28, fontWeight: 900 }}>F</span>unctional <span style={{ fontSize: 28, fontWeight: 900 }}>O</span>rchestration for <span style={{ fontSize: 28, fontWeight: 900 }}>R</span>elease-<span style={{ fontSize: 28, fontWeight: 900 }}>G</span>rade <span style={{ fontSize: 28, fontWeight: 900 }}>E</span>xecution</strong></P>
     <P>FORGE is an execution architecture methodology that replaces Agile's backlog-sprint-velocity model with a graph-based system built on five core practices. It provides specialized workflows, structured specifications, and integration with AI-powered development tools — adapting to your project's complexity whether you're shipping a feature or building an enterprise platform.</P>
     <Callout type="tip" title="New Here?">Start with <strong>Why FORGE</strong> to understand the problem, then read the five Core Concepts in order. Each builds on the last.</Callout>
 
