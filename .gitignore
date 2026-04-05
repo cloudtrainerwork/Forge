@@ -98,6 +98,12 @@ temp/
 *.swo
 *~
 
+# Project docs & assets (not source code)
+investordeck.md
+FORGE-AUDIT-*.md
+FORGE_Spec_*.docx
+*.png
+
 # OS generated files
 .DS_Store
 .DS_Store?
