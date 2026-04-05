@@ -193,6 +193,7 @@ interface ForgeNodeData {
   };
   confidence: string;
   implementationStatus: ImplStatusKey;
+  childCount?: number;
 }
 
 // ── AddNodeForm component (stateful, avoids form submission issues in ReactFlow) ─
@@ -325,21 +326,41 @@ function ForgeNode({
             onClick={onCycleImplStatus ? (e) => { e.stopPropagation(); onCycleImplStatus(data.id); } : undefined}
           />
           {nodeType.icon} {nodeType.label.toUpperCase()}
+          {(data.childCount ?? 0) > 0 && (
+            <span style={{ color: C.textMuted, fontWeight: 400, fontSize: 9, marginLeft: 2 }}>
+              ({data.childCount})
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1">
           {onDrillDown && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onDrillDown(data.id); }}
-              className="p-1 rounded hover:scale-110 transition-transform"
-              style={{
-                background: C.accent, color: 'white', border: 'none',
-                fontSize: 8, width: 16, height: 16,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-              }}
-              title="Drill down into details"
-            >
-              ↘
-            </button>
+            (data.childCount ?? 0) > 0 ? (
+              <button
+                onClick={(e) => { e.stopPropagation(); onDrillDown(data.id); }}
+                className="p-1 rounded hover:scale-110 transition-transform"
+                style={{
+                  background: C.accent, color: 'white', border: 'none',
+                  fontSize: 8, width: 16, height: 16,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                }}
+                title={`View ${data.childCount} children`}
+              >
+                ↘
+              </button>
+            ) : (
+              <button
+                onClick={(e) => { e.stopPropagation(); onDrillDown(data.id); }}
+                className="p-1 rounded hover:scale-110 transition-transform"
+                style={{
+                  background: C.green, color: 'white', border: 'none',
+                  fontSize: 10, width: 16, height: 16,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                }}
+                title="Add children"
+              >
+                +
+              </button>
+            )
           )}
           <button
             onClick={(e) => { e.stopPropagation(); onOpenSpec?.(data.id); }}
@@ -454,6 +475,16 @@ function ForgeGraphFlow({ projectId }: { projectId?: string }) {
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [editingLabel, setEditingLabel] = useState('');
 
+  // ── Hierarchy drill-down state ────────────────────────────────────────────
+  const [contextNodeId, setContextNodeId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const params = new URLSearchParams(window.location.search);
+    return params.get('node') || null;
+  });
+  const [breadcrumbs, setBreadcrumbs] = useState<Array<{ id: string | null; label: string }>>([
+    { id: null, label: 'Root' }
+  ]);
+
   // ── Refs for stable callbacks (prevent nodeTypes recreation) ─────────────
   const nodesRef = useRef<Node[]>([]);
   const edgesRef = useRef<Edge[]>([]);
@@ -546,154 +577,122 @@ function ForgeGraphFlow({ projectId }: { projectId?: string }) {
     registerSave(saveToBackend);
   }, [registerSave, setSaving, markClean]);
 
-  // ── Load data ──────────────────────────────────────────────────────────────
+  // ── Helper: convert readiness value to 0-1 number ──────────────────────────
+  const toReadinessNum = (v: any): number => {
+    if (typeof v === 'number') return v;
+    if (typeof v === 'string') {
+      // Map state strings to percentages
+      if (v === 'COMPLETE') return 1;
+      if (v === 'IN_PROGRESS') return 0.5;
+      return 0; // NOT_STARTED or unknown
+    }
+    if (v && typeof v === 'object') {
+      // Handle {state, percentage} objects
+      if (typeof v.percentage === 'number') return v.percentage / 100;
+      if (v.state === 'COMPLETE') return 1;
+      if (v.state === 'IN_PROGRESS') return 0.5;
+      return 0;
+    }
+    return 0;
+  };
+
+  // ── Helper: map WorkItemDTO[] to ReactFlow Node[] ──────────────────────────
+  const mapItemsToNodes = (items: import('../services').WorkItemDTO[]): Node[] =>
+    items.map((item) => ({
+      id: item.id,
+      type: 'forgeNode',
+      position: { x: item.x ?? Math.random() * 600, y: item.y ?? Math.random() * 400 },
+      data: {
+        id: item.id,
+        type: item.type || 'FEATURE',
+        label: item.title,
+        description: item.description,
+        readiness: {
+          Requirements: toReadinessNum(item.readiness?.requirements),
+          Design: toReadinessNum(item.readiness?.design),
+          Frontend: toReadinessNum(item.readiness?.frontend),
+          Backend: toReadinessNum(item.readiness?.backend),
+          Integration: toReadinessNum(item.readiness?.integration),
+          Test: toReadinessNum(item.readiness?.test),
+        },
+        confidence: item.confidence || 'DEFERRED',
+        implementationStatus: item.implementationStatus || 'NOT_STARTED',
+        childCount: item.childCount ?? 0,
+      },
+      draggable: true,
+    }));
+
+  const mapDepsToEdges = (deps: import('../services').DependencyDTO[]): Edge[] =>
+    deps.map((dep, i) => {
+      const color = dep.type === 'requires' ? C.red : dep.type === 'contains' ? C.textDim : C.blue;
+      const dash = dep.type === 'contains' ? '4,4' : dep.type === 'requires' ? '6,3' : undefined;
+      return {
+        id: `edge-${i}`,
+        source: dep.from,
+        target: dep.to,
+        type: 'smoothstep',
+        style: { stroke: color, strokeWidth: 1.5, strokeDasharray: dash },
+        markerEnd: { type: MarkerType.Arrow, color },
+      };
+    });
+
+  // ── Load breadcrumb trail on mount if deep-linking via ?node= ─────────────
+  useEffect(() => {
+    if (!contextNodeId) return;
+    (async () => {
+      const ancestors = await WorkItemService.getAncestors(contextNodeId);
+      if (ancestors.length > 0) {
+        setBreadcrumbs([
+          { id: null, label: 'Root' },
+          ...ancestors.map(a => ({ id: a.id, label: a.title })),
+        ]);
+      }
+    })();
+  }, []); // Only on mount
+
+  // ── Load data (always from backend — single source of truth) ────────────────
   useEffect(() => {
     const loadData = async () => {
-      // Load all localStorage projects
-      const savedProjects = loadLocalProjects();
-      setProjects(savedProjects);
+      setLoading(true);
 
-      // If we have a projectId, find the matching localStorage project
+      // Set project context if we have a projectId
       if (projectId) {
-        const match = savedProjects.find(p => p.id === projectId);
-        if (match && match.nodes?.length) {
-          setCurrentProject(match);
-          setNodes(match.nodes);
-          setEdges(match.edges ?? []);
-          setLoading(false);
-          setTimeout(() => fitView(), 100);
-          return;
-        }
-        // No localStorage data — try loading from backend work items
-        // Fetch project name from backend
         const projResult = await import('../services/ProjectService').then(m => m.getById(projectId));
         const projName = projResult?.name || '';
         setCurrentProject({ id: projectId, name: projName });
-        try {
-          const [workItems, deps] = await Promise.all([
-            WorkItemService.list(),
-            DependencyService.list(),
-          ]);
-          if (workItems.length > 0) {
-            const reactFlowNodes: Node[] = workItems.map((item) => ({
-              id: item.id,
-              type: 'forgeNode',
-              position: { x: item.x ?? Math.random() * 600, y: item.y ?? Math.random() * 400 },
-              data: {
-                id: item.id,
-                type: item.type || 'FEATURE',
-                label: item.title,
-                description: item.description,
-                readiness: {
-                  Requirements: item.readiness?.requirements || 0,
-                  Design: item.readiness?.design || 0,
-                  Frontend: item.readiness?.frontend || 0,
-                  Backend: item.readiness?.backend || 0,
-                  Integration: item.readiness?.integration || 0,
-                  Test: item.readiness?.test || 0,
-                },
-                confidence: item.confidence || 'medium',
-                implementationStatus: item.implementationStatus || 'NOT_STARTED',
-              },
-              draggable: true,
-            }));
-            const reactFlowEdges: Edge[] = deps.map((dep, i) => {
-              const color = dep.type === 'requires' ? C.red : dep.type === 'contains' ? C.textDim : C.blue;
-              const dash = dep.type === 'contains' ? '4,4' : dep.type === 'requires' ? '6,3' : undefined;
-              return {
-                id: `edge-${i}`,
-                source: dep.from,
-                target: dep.to,
-                type: 'smoothstep',
-                style: { stroke: color, strokeWidth: 1.5, strokeDasharray: dash },
-                markerEnd: { type: MarkerType.Arrow, color },
-              };
-            });
-            setNodes(reactFlowNodes);
-            setEdges(reactFlowEdges);
-            setLoading(false);
-            setTimeout(() => fitView(), 100);
-            return;
-          }
-        } catch (err) {
-          console.warn('[ForgeGraph] Failed to load work items for project:', err);
-        }
-        // No data at all — show empty canvas (not template selector, since projects are created via browser)
-        setLoading(false);
-        return;
       }
 
-      // Legacy path: no projectId — try first localStorage project or load from backend
-      if (savedProjects.length > 0) {
-        const first = savedProjects[0];
-        setCurrentProject(first);
-        if (first.nodes?.length) {
-          setNodes(first.nodes);
-          setEdges(first.edges ?? []);
-          setLoading(false);
-          setTimeout(() => fitView(), 100);
-          return;
-        }
-      }
-
-      // Fall back to backend API
+      // Load work items from backend (filtered by hierarchy context)
       try {
         const [workItems, deps] = await Promise.all([
-          WorkItemService.list(),
+          WorkItemService.listByParent(contextNodeId),
           DependencyService.list(),
         ]);
 
-        const reactFlowNodes: Node[] = workItems.map((item) => ({
-          id: item.id,
-          type: 'forgeNode',
-          position: { x: item.x ?? Math.random() * 600, y: item.y ?? Math.random() * 400 },
-          data: {
-            id: item.id,
-            type: item.type || 'FEATURE',
-            label: item.title,
-            description: item.description,
-            readiness: {
-              Requirements: item.readiness?.requirements || 0,
-              Design:       item.readiness?.design       || 0,
-              Frontend:     item.readiness?.frontend      || 0,
-              Backend:      item.readiness?.backend       || 0,
-              Integration:  item.readiness?.integration   || 0,
-              Test:         item.readiness?.test           || 0,
-            },
-            confidence: item.confidence || 'DEFERRED',
-            implementationStatus: item.implementationStatus || 'NOT_STARTED',
-          },
-          draggable: true,
-        }));
-
-        const reactFlowEdges: Edge[] = deps.map((dep, i) => {
-          const color = dep.type === 'requires' ? C.red : dep.type === 'contains' ? C.textDim : C.blue;
-          const dash = dep.type === 'contains' ? '4,4' : dep.type === 'requires' ? '6,3' : undefined;
-          return {
-            id: `edge-${i}`,
-            source: dep.from,
-            target: dep.to,
-            type: 'smoothstep',
-            style: { stroke: color, strokeWidth: 1.5, strokeDasharray: dash },
-            markerEnd: { type: MarkerType.Arrow, color },
-          };
-        });
-
-        if (reactFlowNodes.length > 0) {
-          setNodes(reactFlowNodes);
-          setEdges(reactFlowEdges);
+        if (workItems.length > 0) {
+          setNodes(mapItemsToNodes(workItems));
+          // Filter edges to only include those between visible nodes
+          const visibleIds = new Set(workItems.map(w => w.id));
+          const filteredEdges = mapDepsToEdges(deps).filter(
+            e => visibleIds.has(e.source) && visibleIds.has(e.target)
+          );
+          setEdges(filteredEdges);
+        } else {
+          setNodes([]);
+          setEdges([]);
         }
         setLoading(false);
         setTimeout(() => fitView(), 100);
       } catch (error) {
         console.error('Failed to load data from backend:', error);
         setLoading(false);
-        setShowTemplateSelector(true);
+        if (!contextNodeId) setShowTemplateSelector(true);
       }
     };
 
     loadData();
-  }, [fitView, projectId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, contextNodeId]);
 
   // ── Load template ──────────────────────────────────────────────────────────
   const loadTemplate = useCallback((templateId: string, customName?: string) => {
@@ -809,7 +808,7 @@ function ForgeGraphFlow({ projectId }: { projectId?: string }) {
       updateLocalGraph(proj.id, updatedNodes, edgesRef.current);
     }
 
-    // Persist to backend (fire-and-forget)
+    // Persist to backend (fire-and-forget) — include parentId if drilled in
     const dto: WorkItemDTO = {
       id, title: label, description: description || '', type: nodeType,
       x, y,
@@ -819,9 +818,10 @@ function ForgeGraphFlow({ projectId }: { projectId?: string }) {
       },
       confidence: 'low',
       implementationStatus: 'NOT_STARTED',
+      parentId: contextNodeId,
     };
     WorkItemService.create(dto).catch(err => console.warn('[ForgeGraph] Failed to save new node:', err));
-  }, [reactFlowInstance]);
+  }, [reactFlowInstance, contextNodeId]);
 
   // ── Rename node ────────────────────────────────────────────────────────────
   const handleRenameNode = useCallback((nodeId: string, newLabel: string) => {
@@ -890,17 +890,83 @@ function ForgeGraphFlow({ projectId }: { projectId?: string }) {
     setSelectedNode(node.data);
   }, []);
 
-  // ── Drill-down ─────────────────────────────────────────────────────────────
+  // ── Drill-down (in-place hierarchy navigation) ─────────────────────────────
   const handleDrillDown = useCallback((nodeId: string) => {
-    const slug = routeParams?.slug as string | undefined;
-    const pid = projectId || (routeParams?.projectId as string | undefined);
-    if (slug && pid) {
-      window.location.href = `/t/${slug}/projects/${pid}/detail/${nodeId}`;
-    } else {
-      // Fallback for non-tenant routes
-      window.location.href = `/workflow/${nodeId}`;
-    }
-  }, [routeParams, projectId]);
+    // Find the node's label for breadcrumb
+    const node = nodesRef.current.find(n => n.id === nodeId);
+    const label = node?.data?.label || nodeId;
+
+    setContextNodeId(nodeId);
+    setBreadcrumbs(prev => [...prev, { id: nodeId, label }]);
+
+    // Update URL without page reload
+    const url = new URL(window.location.href);
+    url.searchParams.set('node', nodeId);
+    window.history.replaceState({}, '', url.toString());
+  }, []);
+
+  // ── Navigate up one level ─────────────────────────────────────────────────
+  const handleNavigateUp = useCallback(() => {
+    setBreadcrumbs(prev => {
+      if (prev.length <= 1) return prev; // Already at root
+      const newBreadcrumbs = prev.slice(0, -1);
+      const parentCrumb = newBreadcrumbs[newBreadcrumbs.length - 1];
+      setContextNodeId(parentCrumb.id);
+
+      // Update URL
+      const url = new URL(window.location.href);
+      if (parentCrumb.id) {
+        url.searchParams.set('node', parentCrumb.id);
+      } else {
+        url.searchParams.delete('node');
+      }
+      window.history.replaceState({}, '', url.toString());
+
+      return newBreadcrumbs;
+    });
+  }, []);
+
+  // ── Navigate to specific breadcrumb ───────────────────────────────────────
+  const handleBreadcrumbClick = useCallback((index: number) => {
+    setBreadcrumbs(prev => {
+      const newBreadcrumbs = prev.slice(0, index + 1);
+      const crumb = newBreadcrumbs[newBreadcrumbs.length - 1];
+      setContextNodeId(crumb.id);
+
+      const url = new URL(window.location.href);
+      if (crumb.id) {
+        url.searchParams.set('node', crumb.id);
+      } else {
+        url.searchParams.delete('node');
+      }
+      window.history.replaceState({}, '', url.toString());
+
+      return newBreadcrumbs;
+    });
+  }, []);
+
+  // ── Backspace to navigate up ──────────────────────────────────────────────
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only navigate up on Backspace if not editing a node or in an input
+      if (e.key === 'Backspace' && !editingNodeId && !showAddNode) {
+        const target = e.target as HTMLElement;
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+        if (contextNodeId) {
+          e.preventDefault();
+          handleNavigateUp();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [contextNodeId, editingNodeId, showAddNode, handleNavigateUp]);
+
+  // ── Add child / view children (+ or ↘ button on node) ──────────────────
+  // Both buttons just drill down — the + Add Node inside handles creation
+  const handleAddChild = useCallback((parentId: string) => {
+    handleDrillDown(parentId);
+  }, [handleDrillDown]);
 
   // ── Edge click (Cmd+Click to delete) ──────────────────────────────────────
   const onEdgeClick = useCallback(async (event: React.MouseEvent, edge: Edge) => {
@@ -970,13 +1036,14 @@ function ForgeGraphFlow({ projectId }: { projectId?: string }) {
     [handleDrillDown, handleOpenSpec, specVersion, editingNodeId, handleStartEdit, handleFinishEdit, handleCycleImplStatus],
   );
 
-  // ── Auto-save project to localStorage ─────────────────────────────────────
+  // ── Auto-save project to localStorage (root level only) ───────────────────
+  // Skip when drilled into a child context to avoid overwriting the full graph
   useEffect(() => {
-    if (currentProject && nodes.length > 0) {
+    if (currentProject && nodes.length > 0 && !contextNodeId) {
       const updated = updateLocalGraph(currentProject.id, nodes, edges);
       setProjects(updated);
     }
-  }, [nodes, edges, currentProject]);
+  }, [nodes, edges, currentProject, contextNodeId]);
 
   // ── Project navigation ────────────────────────────────────────────────────
   const handleSelectProject = useCallback((project: any) => {
@@ -1018,7 +1085,40 @@ function ForgeGraphFlow({ projectId }: { projectId?: string }) {
   }
 
   return (
-    <div className="w-full h-full" style={{ background: C.bg }}>
+    <div className="w-full h-full flex flex-col" style={{ background: C.bg }}>
+      {/* Hierarchy breadcrumb bar */}
+      {contextNodeId && (
+        <div
+          className="flex-shrink-0 flex items-center gap-1 px-4 py-2 text-xs"
+          style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, zIndex: 10 }}
+        >
+          {breadcrumbs.map((crumb, idx) => (
+            <React.Fragment key={idx}>
+              {idx > 0 && <span style={{ color: C.textDim }}>/</span>}
+              <button
+                onClick={() => handleBreadcrumbClick(idx)}
+                className="hover:underline transition-colors"
+                style={{
+                  color: idx === breadcrumbs.length - 1 ? C.text : C.textMuted,
+                  fontWeight: idx === breadcrumbs.length - 1 ? 600 : 400,
+                  background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px',
+                }}
+              >
+                {idx === 0 ? '🏠 Root' : crumb.label}
+              </button>
+            </React.Fragment>
+          ))}
+          <button
+            onClick={handleNavigateUp}
+            className="ml-2 px-2 py-0.5 rounded text-xs transition-colors"
+            style={{ background: C.surfaceAlt, color: C.textMuted, border: `1px solid ${C.border}` }}
+            title="Navigate up (Backspace)"
+          >
+            ← Back
+          </button>
+        </div>
+      )}
+      <div className="flex-1 relative">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -1185,6 +1285,7 @@ function ForgeGraphFlow({ projectId }: { projectId?: string }) {
         isOpen={showProjectNav}
         onClose={() => setShowProjectNav(false)}
       />
+    </div>
     </div>
   );
 }

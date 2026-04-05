@@ -251,25 +251,54 @@ export class WorkItemRepository implements IWorkItemRepository {
     }
   }
 
-  async findAll(limit: number = 50, offset: number = 0): Promise<{
+  async findAll(limit: number = 50, offset: number = 0, parentId?: string): Promise<{
     items: WorkItem[];
     total: number;
     hasMore: boolean;
   }> {
     try {
+      // Build where clause for hierarchy filtering
+      const where: any = {};
+      if (parentId === 'root') {
+        where.parentId = null; // Top-level items only
+      } else if (parentId) {
+        where.parentId = parentId; // Children of specific node
+      }
+
       const [items, total] = await Promise.all([
         this.prisma.workItem.findMany({
+          where,
           take: limit,
           skip: offset,
           orderBy: { updatedAt: 'desc' }
         }),
-        this.prisma.workItem.count()
+        this.prisma.workItem.count({ where })
       ]);
 
+      // Attach child counts to each item
+      if (items.length > 0) {
+        const parentIds = items.map(i => i.id);
+        const childCounts = await this.prisma.workItem.groupBy({
+          by: ['parentId'],
+          where: { parentId: { in: parentIds } },
+          _count: { id: true },
+        });
+        const countMap = new Map(childCounts.map(c => [c.parentId, c._count.id]));
+        return {
+          items: items.map(item => {
+            const wi = this.mapToWorkItem(item);
+            (wi as any)._childCount = countMap.get(item.id) || 0;
+            return wi;
+          }),
+          total,
+          hasMore: offset + items.length < total
+        };
+      }
+
       return {
-        items: items.map(item => this.mapToWorkItem(item)),
+        items: [],
         total,
-        hasMore: offset + items.length < total
+        hasMore: false
       };
     } catch (error) {
       throw new Error(`Failed to find all work items: ${error instanceof Error ? error.message : 'Unknown error'}`);

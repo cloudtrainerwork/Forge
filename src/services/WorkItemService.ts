@@ -244,6 +244,7 @@ export class WorkItemService {
     dimension?: keyof ReadinessState;
     value?: ReadinessDimension;
     searchTerm?: string;
+    parentId?: string;
     limit?: number;
     offset?: number;
   } = {}): Promise<{
@@ -252,7 +253,12 @@ export class WorkItemService {
     hasMore: boolean;
   }> {
     try {
-      const { dimension, value, searchTerm, limit = 50, offset = 0 } = options;
+      const { dimension, value, searchTerm, parentId, limit = 50, offset = 0 } = options;
+
+      // Hierarchy filtering: parentId query
+      if (parentId) {
+        return await this.workItemRepository.findAll(limit, offset, parentId);
+      }
 
       if (searchTerm) {
         const items = await this.workItemRepository.findBySearch(searchTerm, limit, offset);

@@ -30,6 +30,8 @@ export interface WorkItemDTO {
   };
   confidence: string;
   implementationStatus: string; // NOT_STARTED | STUBBED | PARTIAL | FUNCTIONAL | PRODUCTION
+  parentId?: string | null;
+  childCount?: number;
 }
 
 export interface WorkItemListResponse {
@@ -45,6 +47,22 @@ export async function list(): Promise<WorkItemDTO[]> {
   const result = await api.safeGet<WorkItemListResponse>('/work-items');
   if (result.ok) return result.data.data ?? [];
   console.debug('[WorkItemService] list failed:', result.error.message);
+  return [];
+}
+
+/** Fetch work items filtered by parentId (hierarchy drill-down) */
+export async function listByParent(parentId: string | null): Promise<WorkItemDTO[]> {
+  const param = parentId ?? 'root';
+  const result = await api.safeGet<WorkItemListResponse>(`/work-items?parentId=${encodeURIComponent(param)}`);
+  if (result.ok) return result.data.data ?? [];
+  console.debug('[WorkItemService] listByParent failed:', result.error.message);
+  return [];
+}
+
+/** Get ancestor chain for breadcrumb reconstruction */
+export async function getAncestors(id: string): Promise<Array<{ id: string; title: string }>> {
+  const result = await api.safeGet<{ data: Array<{ id: string; title: string }> }>(`/work-items/${id}/ancestors`);
+  if (result.ok) return result.data.data ?? [];
   return [];
 }
 

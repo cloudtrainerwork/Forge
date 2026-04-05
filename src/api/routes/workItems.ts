@@ -30,6 +30,7 @@ export function workItemRoutes(serviceFactory: ServiceFactory): Router {
         dimension,
         value,
         search,
+        parentId,
         limit = '50',
         offset = '0'
       } = req.query;
@@ -43,6 +44,11 @@ export function workItemRoutes(serviceFactory: ServiceFactory): Router {
         limit: parsedLimit,
         offset: parsedOffset
       };
+
+      // Filter by parentId (hierarchy drill-down)
+      if (parentId && typeof parentId === 'string') {
+        options.parentId = parentId; // 'root' = top-level items, otherwise = children of that ID
+      }
 
       if (search && typeof search === 'string') {
         options.searchTerm = search.trim();
@@ -169,6 +175,30 @@ export function workItemRoutes(serviceFactory: ServiceFactory): Router {
         timestamp: new Date().toISOString()
       });
 
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /work-items/:id/ancestors - Get ancestor chain for breadcrumb reconstruction
+   */
+  router.get('/:id/ancestors', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const workItemService = serviceFactory.getService<WorkItemService>('WorkItemService');
+      const { id } = req.params;
+      const ancestors: Array<{ id: string; title: string }> = [];
+      let currentId: string | undefined = id;
+
+      // Walk up the parent chain (max 10 levels to prevent infinite loops)
+      for (let i = 0; i < 10 && currentId; i++) {
+        const item = await workItemService.getWorkItem(currentId);
+        if (!item) break;
+        ancestors.unshift({ id: item.id, title: item.title || item.id });
+        currentId = item.parentId;
+      }
+
+      res.json({ data: ancestors, timestamp: new Date().toISOString() });
     } catch (error) {
       next(error);
     }

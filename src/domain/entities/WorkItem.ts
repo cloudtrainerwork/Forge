@@ -326,6 +326,7 @@ export class WorkItem {
       y: pos?.y ?? null,
       readiness: this.readiness.toJSON(),
       type: this.deliverableType ? this.deliverableType.toUpperCase() : null,
+      childCount: (this as any)._childCount ?? 0,
       groupId: this.groupId,
       sprintId: this.sprintId,
       parentId: this.parentId || null,
