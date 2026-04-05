@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Control, Controller } from 'react-hook-form';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { SpecificationStatusIndicator } from './SpecificationStatusIndicator';
 import { updateSpecificationSection } from '../../utils/api';
 
@@ -58,8 +60,10 @@ const SECTION_PLACEHOLDERS: Record<string, string> = {
 };
 
 // Status determination based on content
-function determineStatus(content: string, wordCount: number): SectionStatus {
-  if (!content || content.trim().length === 0) return 'empty';
+function determineStatus(content: string | any, wordCount: number): SectionStatus {
+  // Handle both string and object input
+  const text = typeof content === 'string' ? content : (content?.content || '');
+  if (!text || text.trim().length === 0) return 'empty';
   if (wordCount < 20) return 'draft';
   if (wordCount < 100) return 'review';
   return 'complete';
@@ -85,12 +89,14 @@ export function SpecificationSection({
   disabled = false,
   placeholder
 }: SpecificationSectionProps) {
-  const [isLoading, setIsLoading] = useState(false);
+  // Use refs for save state to avoid re-renders that steal focus
+  const [isPreview, setIsPreview] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastAutoSave, setLastAutoSave] = useState<Date | null>(null);
-
-  // Auto-save debounce timer
-  const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
+  const saveStatusRef = useRef<{ isLoading: boolean; lastAutoSave: Date | null }>({ isLoading: false, lastAutoSave: null });
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Force-update trigger only for save status display (non-critical)
+  const [, forceUpdate] = useState(0);
 
   // Get section-specific placeholder
   const sectionPlaceholder = useMemo(() => {
@@ -98,25 +104,26 @@ export function SpecificationSection({
   }, [placeholder, sectionName]);
 
   // Calculate word count
-  const calculateWordCount = useCallback((text: string): number => {
-    if (!text || text.trim().length === 0) return 0;
-    return text.trim().split(/\s+/).length;
+  const calculateWordCount = useCallback((text: string | any): number => {
+    // Handle both string and object input
+    const content = typeof text === 'string' ? text : (text?.content || '');
+    if (!content || content.trim().length === 0) return 0;
+    return content.trim().split(/\s+/).length;
   }, []);
 
-  // Auto-save function with debouncing
+  // Auto-save function with debouncing — uses refs to avoid re-renders
   const handleAutoSave = useCallback(async (content: string, currentStatus: SectionStatus) => {
     if (!workItemId) return;
 
     // Clear existing timer
-    if (autoSaveTimer) {
-      clearTimeout(autoSaveTimer);
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
     }
 
     // Set new debounced timer
-    const timer = setTimeout(async () => {
+    autoSaveTimerRef.current = setTimeout(async () => {
       try {
-        setIsLoading(true);
-        setError(null);
+        saveStatusRef.current.isLoading = true;
 
         const wordCount = calculateWordCount(content);
         const sectionUpdate: SpecificationSectionData = {
@@ -127,28 +134,59 @@ export function SpecificationSection({
         };
 
         await updateSpecificationSection(workItemId, sectionName, sectionUpdate);
-        setLastAutoSave(new Date());
+        saveStatusRef.current.lastAutoSave = new Date();
+        saveStatusRef.current.isLoading = false;
 
         // Notify parent of status change
         onStatusChange?.(currentStatus);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to save changes');
-      } finally {
-        setIsLoading(false);
-      }
-    }, 500); // 500ms debounce delay
 
-    setAutoSaveTimer(timer);
-  }, [workItemId, sectionName, onStatusChange, autoSaveTimer, calculateWordCount]);
+        // Update display only when textarea is NOT focused (so we don't steal focus)
+        if (document.activeElement !== textareaRef.current) {
+          forceUpdate(n => n + 1);
+        }
+      } catch (err) {
+        saveStatusRef.current.isLoading = false;
+        // Only set error state for real errors (not 404s — those are handled in api.ts)
+        setError(err instanceof Error ? err.message : 'Failed to save changes');
+      }
+    }, 1000); // 1s debounce delay (longer to reduce save frequency)
+  }, [workItemId, sectionName, onStatusChange, calculateWordCount]);
 
   // Cleanup timer on unmount
   useEffect(() => {
     return () => {
-      if (autoSaveTimer) {
-        clearTimeout(autoSaveTimer);
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
       }
     };
-  }, [autoSaveTimer]);
+  }, []);
+
+  // Prevent spacebar from causing navigation issues
+  useEffect(() => {
+    const preventSpacebarNavigation = (e: Event) => {
+      // If the event is happening in a textarea, prevent it from bubbling up
+      if ((e.target as HTMLElement)?.tagName === 'TEXTAREA') {
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
+    };
+
+    // Listen to all form submissions and prevent them
+    const preventFormSubmit = (e: Event) => {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    };
+
+    // Add listeners
+    document.addEventListener('keydown', preventSpacebarNavigation, true);
+    document.addEventListener('submit', preventFormSubmit, true);
+
+    return () => {
+      document.removeEventListener('keydown', preventSpacebarNavigation, true);
+      document.removeEventListener('submit', preventFormSubmit, true);
+    };
+  }, []);
 
   return (
     <div className="space-y-3">
@@ -172,23 +210,51 @@ export function SpecificationSection({
 
         {/* Word count and last saved indicator */}
         <div className="flex items-center gap-3 text-xs" style={{ color: C.textMuted }}>
+          {/* Preview/Edit toggle */}
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setIsPreview(false)}
+              className={`px-2 py-1 rounded transition-all ${!isPreview ? 'font-medium' : ''}`}
+              style={{
+                backgroundColor: !isPreview ? C.blueDim : 'transparent',
+                color: !isPreview ? C.blue : C.textMuted,
+              }}
+              disabled={disabled}
+            >
+              Edit
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsPreview(true)}
+              className={`px-2 py-1 rounded transition-all ${isPreview ? 'font-medium' : ''}`}
+              style={{
+                backgroundColor: isPreview ? C.greenDim : 'transparent',
+                color: isPreview ? C.green : C.textMuted,
+              }}
+              disabled={disabled}
+            >
+              Preview
+            </button>
+          </div>
+
           {sectionData && (
             <span>
               {sectionData.wordCount} words
             </span>
           )}
 
-          {lastAutoSave && (
+          {saveStatusRef.current.lastAutoSave && (
             <span className="flex items-center gap-1">
               <div
                 className="w-2 h-2 rounded-full"
                 style={{ backgroundColor: C.green }}
               />
-              Saved {lastAutoSave.toLocaleTimeString()}
+              Saved {saveStatusRef.current.lastAutoSave.toLocaleTimeString()}
             </span>
           )}
 
-          {isLoading && (
+          {saveStatusRef.current.isLoading && (
             <span className="flex items-center gap-1">
               <div
                 className="w-2 h-2 rounded-full animate-pulse"
@@ -218,44 +284,170 @@ export function SpecificationSection({
       <Controller
         name={`sections.${sectionName.toLowerCase()}`}
         control={control}
-        defaultValue={sectionData?.content || ''}
+        shouldUnregister={false}
         render={({ field, fieldState }) => {
-          const wordCount = calculateWordCount(field.value || '');
-          const currentStatus = determineStatus(field.value || '', wordCount);
+          // Extract content string from field value (might be object or string)
+          const content = typeof field.value === 'string' ? field.value : (field.value?.content || '');
+          const wordCount = calculateWordCount(content);
+          const currentStatus = determineStatus(content, wordCount);
           const borderColor = getBorderColor(currentStatus);
 
           return (
             <div className="space-y-2">
-              <textarea
-                {...field}
-                disabled={disabled || isLoading}
-                placeholder={sectionPlaceholder}
-                className="w-full min-h-[120px] p-3 rounded-lg resize-vertical transition-all duration-200 focus:outline-none"
-                style={{
-                  backgroundColor: disabled ? C.surfaceAlt : C.surface,
-                  border: `1.5px solid ${fieldState.error ? C.red : borderColor}`,
-                  color: C.text,
-                  fontSize: '14px',
-                  lineHeight: '1.5',
+              {isPreview ? (
+                // Markdown preview mode
+                <div
+                  className="w-full min-h-[120px] p-3 rounded-lg"
+                  style={{
+                    backgroundColor: C.surface,
+                    border: `1.5px solid ${borderColor}`,
+                    color: C.text,
+                  }}
+                >
+                  {content ? (
+                    <div className="prose prose-invert max-w-none">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                        h1: ({children}) => <h1 className="text-xl font-bold mb-3 mt-4" style={{color: C.text}}>{children}</h1>,
+                        h2: ({children}) => <h2 className="text-lg font-semibold mb-2 mt-3" style={{color: C.text}}>{children}</h2>,
+                        h3: ({children}) => <h3 className="text-base font-medium mb-2 mt-2" style={{color: C.text}}>{children}</h3>,
+                        p: ({children}) => <p className="mb-2" style={{color: C.text, lineHeight: '1.5'}}>{children}</p>,
+                        ul: ({children}) => <ul className="list-disc pl-5 mb-2" style={{color: C.text}}>{children}</ul>,
+                        ol: ({children}) => <ol className="list-decimal pl-5 mb-2" style={{color: C.text}}>{children}</ol>,
+                        li: ({children}) => <li className="mb-1" style={{color: C.text}}>{children}</li>,
+                        code: ({children, ...props}: any) =>
+                          props.inline ? (
+                            <code className="px-1 py-0.5 rounded" style={{backgroundColor: C.surfaceAlt, color: C.blue}}>
+                              {children}
+                            </code>
+                          ) : (
+                            <pre className="p-3 rounded mb-2 overflow-x-auto" style={{backgroundColor: C.surfaceAlt}}>
+                              <code style={{color: C.text}}>{children}</code>
+                            </pre>
+                          ),
+                        blockquote: ({children}) => (
+                          <blockquote className="border-l-4 pl-3 my-2" style={{borderColor: C.border, color: C.textMuted}}>
+                            {children}
+                          </blockquote>
+                        ),
+                        a: ({children, href}) => (
+                          <a href={href} target="_blank" rel="noopener noreferrer" className="underline" style={{color: C.blue}}>
+                            {children}
+                          </a>
+                        ),
+                        hr: () => <hr className="my-3" style={{borderColor: C.border}} />,
+                        table: ({children}) => (
+                          <table className="w-full mb-2" style={{borderColor: C.border}}>
+                            {children}
+                          </table>
+                        ),
+                        th: ({children}) => (
+                          <th className="p-2 text-left font-semibold" style={{borderBottom: `1px solid ${C.border}`, color: C.text}}>
+                            {children}
+                          </th>
+                        ),
+                        td: ({children}) => (
+                          <td className="p-2" style={{borderBottom: `1px solid ${C.border}`, color: C.text}}>
+                            {children}
+                          </td>
+                        ),
+                      }}
+                      >
+                        {content}
+                      </ReactMarkdown>
+                    </div>
+                  ) : (
+                    <span style={{color: C.textMuted}}>{sectionPlaceholder}</span>
+                  )}
+                </div>
+              ) : (
+                // Edit mode with textarea
+                <textarea
+                  {...field}
+                  ref={textareaRef}
+                  value={content}
+                  disabled={disabled}
+                  placeholder={sectionPlaceholder}
+                  className="w-full min-h-[120px] p-3 rounded-lg resize-vertical transition-all duration-200 focus:outline-none font-mono"
+                  style={{
+                    backgroundColor: disabled ? C.surfaceAlt : C.surface,
+                    border: `1.5px solid ${fieldState.error ? C.red : borderColor}`,
+                    color: C.text,
+                    fontSize: '14px',
+                    lineHeight: '1.5',
+                  }}
+                onKeyDown={(e) => {
+                  // Stop all events from bubbling up when typing in the textarea
+                  e.stopPropagation();
+
+                  // Prevent spacebar from causing any default behavior (like form submission or button clicks)
+                  if (e.key === ' ' || e.keyCode === 32) {
+                    // Allow the space to be typed but prevent any other default behavior
+                    e.stopPropagation();
+                    // Don't prevent default as we want the space to be typed
+                  }
+
+                  // Allow Tab for indentation in textarea
+                  if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey) {
+                    e.preventDefault();
+                    const target = e.target as HTMLTextAreaElement;
+                    const start = target.selectionStart;
+                    const end = target.selectionEnd;
+                    const value = target.value;
+                    target.value = value.substring(0, start) + '  ' + value.substring(end);
+                    target.selectionStart = target.selectionEnd = start + 2;
+
+                    // Trigger onChange manually after programmatic change
+                    const event = new Event('input', { bubbles: true });
+                    target.dispatchEvent(event);
+                  }
                 }}
-                onChange={(e) => {
-                  field.onChange(e);
-
-                  // Update section data and trigger auto-save
-                  const newWordCount = calculateWordCount(e.target.value);
-                  const newStatus = determineStatus(e.target.value, newWordCount);
-
-                  // Call auto-save with debouncing
-                  handleAutoSave(e.target.value, newStatus);
+                onKeyUp={(e) => {
+                  e.stopPropagation();
+                }}
+                onKeyPress={(e) => {
+                  e.stopPropagation();
+                }}
+                onClick={(e) => {
+                  // Prevent click events from bubbling up
+                  e.stopPropagation();
                 }}
                 onFocus={(e) => {
+                  e.stopPropagation();
                   e.target.style.borderColor = C.borderActive;
                 }}
                 onBlur={(e) => {
-                  const currentStatus = determineStatus(field.value || '', wordCount);
+                  e.stopPropagation();
+                  const currentStatus = determineStatus(content, wordCount);
                   e.target.style.borderColor = getBorderColor(currentStatus);
                 }}
-              />
+                onChange={(e) => {
+                  // Update the field with the new content value
+                  const newContent = e.target.value;
+
+                  // If field value is an object, update just the content
+                  if (typeof field.value === 'object' && field.value !== null) {
+                    field.onChange({
+                      ...field.value,
+                      content: newContent,
+                      wordCount: calculateWordCount(newContent),
+                      status: determineStatus(newContent, calculateWordCount(newContent)),
+                      lastUpdated: new Date().toISOString()
+                    });
+                  } else {
+                    field.onChange(newContent);
+                  }
+
+                  // Update section data and trigger auto-save
+                  const newWordCount = calculateWordCount(newContent);
+                  const newStatus = determineStatus(newContent, newWordCount);
+
+                  // Call auto-save with debouncing
+                  handleAutoSave(newContent, newStatus);
+                }}
+                />
+              )}
 
               {/* Field Error */}
               {fieldState.error && (

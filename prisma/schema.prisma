@@ -3,7 +3,6 @@
 
 generator client {
   provider = "prisma-client-js"
-  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
@@ -11,7 +10,8 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Basic health check model to ensure connection works
+// ── Health check ──────────────────────────────────────────────────────────────
+
 model HealthCheck {
   id        Int      @id @default(autoincrement())
   status    String   @default("healthy")
@@ -21,43 +21,161 @@ model HealthCheck {
   @@map("health_checks")
 }
 
-// Work item model with flexible JSONB spec and readiness tracking
-model WorkItem {
-  id                      String                   @id @default(cuid())
-  title                   String?
-  description             String?
-  spec                    Json                     @db.JsonB // Flexible work item specifications
-  readiness               Json                     @db.JsonB // 6-dimensional readiness tracking
-  readinessConfigurationId String?                  @map("readiness_configuration_id")
-  readinessConfiguration   ReadinessConfiguration? @relation(fields: [readinessConfigurationId], references: [id])
-  createdAt               DateTime                 @default(now()) @map("created_at")
-  updatedAt               DateTime                 @updatedAt @map("updated_at")
+// ── Tenancy ───────────────────────────────────────────────────────────────────
 
+model Tenant {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  status    String   @default("active")  // active | suspended | deactivated
+  planTier  String   @default("free") @map("plan_tier") // free | starter | pro | enterprise
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  memberships             TenantMembership[]
+  projects                Project[]
+  workItems               WorkItem[]
+  readinessConfigurations ReadinessConfiguration[]
+  auditLogs               AuditLog[]
+
+  @@map("tenants")
+}
+
+// ── Identity ──────────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  image         String?
+  emailVerified DateTime? @map("email_verified")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  accounts           Account[]
+  sessions           Session[]
+  memberships        TenantMembership[]
+  createdProjects    Project[]          @relation("ProjectCreator")
+  projectMemberships ProjectMembership[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String  @map("user_id")
+  provider          String  // google | microsoft | github
+  providerAccountId String  @map("provider_account_id")
+  type              String  @default("oauth") // oauth | oidc
+  accessToken       String? @map("access_token")
+  refreshToken      String? @map("refresh_token")
+  expiresAt         Int?    @map("expires_at")
+  tokenType         String? @map("token_type")
+  scope             String?
+  idToken           String? @map("id_token")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+// ── Tenant membership ─────────────────────────────────────────────────────────
+
+model TenantMembership {
+  id        String   @id @default(cuid())
+  tenantId  String   @map("tenant_id")
+  userId    String   @map("user_id")
+  role      String   @default("MEMBER") // OWNER | ADMIN | MEMBER | VIEWER
+  status    String   @default("active") // active | invited | suspended
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId])
+  @@index([userId])
+  @@map("tenant_memberships")
+}
+
+// ── Work items (tenant-scoped) ────────────────────────────────────────────────
+
+model WorkItem {
+  id                       String                   @id @default(cuid())
+  tenantId                 String                   @map("tenant_id")
+  projectId                String?                  @map("project_id")
+  title                    String?
+  description              String?
+  spec                     Json                     @db.JsonB
+  readiness                Json                     @db.JsonB
+  implementationStatus     String                   @default("NOT_STARTED") @map("implementation_status") // NOT_STARTED | STUBBED | PARTIAL | FUNCTIONAL | PRODUCTION
+  deliverableType          String?                  @map("deliverable_type") // FEATURE | SERVICE | SCREEN | INTEGRATION | DATABASE | API | COMPONENT | DTO | TEST | CONFIG | DOCUMENT | VIEWMODEL | MANAGER | GENERIC
+  parentId                 String?                  @map("parent_id") // Self-referencing for hierarchical node nesting
+  readinessConfigurationId String?                  @map("readiness_configuration_id")
+  readinessConfiguration   ReadinessConfiguration?  @relation(fields: [readinessConfigurationId], references: [id])
+  createdAt                DateTime                 @default(now()) @map("created_at")
+  updatedAt                DateTime                 @updatedAt @map("updated_at")
+
+  tenant  Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  parent  WorkItem? @relation("WorkItemHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children WorkItem[] @relation("WorkItemHierarchy")
+
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([tenantId, id])
+  @@index([projectId])
+  @@index([parentId])
   @@map("work_items")
 }
 
-// Readiness configuration for custom states and validation rules
+// ── Readiness configurations (tenant-scoped) ──────────────────────────────────
+
 model ReadinessConfiguration {
   id              String     @id @default(cuid())
-  name            String     @unique
+  tenantId        String     @map("tenant_id")
+  name            String
   description     String?
-  states          Json       @db.JsonB // StateConfiguration[]
-  validationRules Json       @db.JsonB // ValidationRule[]
+  states          Json       @db.JsonB
+  validationRules Json       @db.JsonB
   workItems       WorkItem[]
   createdAt       DateTime   @default(now()) @map("created_at")
   updatedAt       DateTime   @updatedAt @map("updated_at")
 
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
   @@map("readiness_configurations")
 }
 
-// Audit log for complete traceability
+// ── Audit log (tenant-scoped) ─────────────────────────────────────────────────
+
 model AuditLog {
   id        String        @id @default(cuid())
-  type      AuditLogType  // What kind of change happened
-  entityId  String        @map("entity_id") // ID of the affected entity
-  changes   Json          @db.JsonB // What changed (before/after, metadata)
+  tenantId  String        @map("tenant_id")
+  type      AuditLogType
+  entityId  String        @map("entity_id")
+  actorId   String?       @map("actor_id")
+  changes   Json          @db.JsonB
   timestamp DateTime      @default(now())
 
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, timestamp(sort: Desc)])
+  @@index([tenantId, entityId])
   @@map("audit_logs")
 }
 
@@ -69,4 +187,56 @@ enum AuditLogType {
   READINESS_UPDATED
   READINESS_CONFIG_CREATED
   READINESS_CONFIG_UPDATED
+  TENANT_CREATED
+  USER_JOINED
+  USER_LEFT
+  PROJECT_CREATED
+  PROJECT_UPDATED
+  PROJECT_ARCHIVED
+  PROJECT_MEMBER_ADDED
+  PROJECT_MEMBER_REMOVED
+  PROJECT_MEMBER_ROLE_UPDATED
+}
+
+// ── Projects (tenant-scoped) ──────────────────────────────────────────────────
+
+model Project {
+  id          String   @id @default(cuid())
+  tenantId    String   @map("tenant_id")
+  name        String
+  description String?
+  status      String   @default("active") // active | archived
+  createdById String   @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  tenant    Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy User                @relation("ProjectCreator", fields: [createdById], references: [id])
+  members   ProjectMembership[]
+  workItems WorkItem[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([tenantId, status])
+  @@map("projects")
+}
+
+// ── Project memberships (project-scoped roles) ───────────────────────────────
+
+model ProjectMembership {
+  id        String   @id @default(cuid())
+  projectId String   @map("project_id")
+  userId    String   @map("user_id")
+  role      String   @default("MEMBER") // PM | PJM | BA | EA | SA | DEV | QA | MEMBER | VIEWER
+  status    String   @default("active") // active | invited | suspended
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([userId])
+  @@index([projectId, role])
+  @@map("project_memberships")
 }

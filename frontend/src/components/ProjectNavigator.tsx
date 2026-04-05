@@ -50,7 +50,7 @@ export default function ProjectNavigator({
   const getTemplateIcon = (templateId?: string) => {
     if (!templateId) return '📄';
     const categoryKey = templateId.split('-')[0];
-    const category = TEMPLATE_CATEGORIES[categoryKey];
+    const category = (TEMPLATE_CATEGORIES as Record<string, any>)[categoryKey];
     return category?.icon || '📄';
   };
 

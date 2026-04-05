@@ -1,8 +1,16 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { ReadinessState, ReadinessDimension } from '../../domain/entities.js';
+import { ReadinessState, ReadinessDimension, ImplementationStatus } from '../../domain/entities.js';
+import type { ReadinessDimensionKey } from '../../domain/entities.js';
 import { WorkItemService } from '../../services/WorkItemService.js';
 import { ServiceFactory } from '../../factories/ServiceFactory.js';
+import type { AuthenticatedRequest } from '../../auth/types.js';
+
+/** Helper to extract tenantId from authenticated request */
+function getTenantId(req: Request): string {
+  const authReq = req as AuthenticatedRequest;
+  return authReq.tenant?.tenantId || 'system-default';
+}
 
 /**
  * Work item routes with dependency injection for WorkItemService
@@ -93,7 +101,12 @@ export function workItemRoutes(serviceFactory: ServiceFactory): Router {
         title,
         description,
         spec = {},
-        readiness
+        readiness,
+        x,
+        y,
+        type,
+        implementationStatus,
+        parentId,
       } = req.body;
 
       // Validate required fields
@@ -128,12 +141,26 @@ export function workItemRoutes(serviceFactory: ServiceFactory): Router {
         }
       }
 
+      // Merge canvas position into spec if provided
+      const finalSpec = { ...(spec || {}) };
+      if (typeof x === 'number' && typeof y === 'number') {
+        finalSpec._position = { x, y };
+      }
+
+      // Normalize deliverableType: frontend sends uppercase keys, backend enum uses lowercase
+      const normalizedType = type ? type.toLowerCase() : undefined;
+
+      const tenantId = getTenantId(req);
       const workItem = await workItemService.createWorkItem(
+        tenantId,
         id,
         title.trim(),
-        spec || {},
+        finalSpec,
         description?.trim(),
-        readinessState
+        readinessState,
+        normalizedType,
+        parentId,
+        implementationStatus,
       );
 
       res.status(201).json({
@@ -184,6 +211,117 @@ export function workItemRoutes(serviceFactory: ServiceFactory): Router {
   });
 
   /**
+   * PUT /work-items/:id - Update work item title, description, type, or implementationStatus
+   */
+  router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const workItemService = serviceFactory.getService<WorkItemService>('WorkItemService');
+      const { id } = req.params;
+      const { title, description, implementationStatus, type: deliverableType } = req.body;
+
+      if (!id || typeof id !== 'string') {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'Work item ID is required',
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      // Validate implementationStatus if provided
+      if (implementationStatus !== undefined) {
+        const validStatuses = Object.values(ImplementationStatus);
+        if (!validStatuses.includes(implementationStatus)) {
+          return res.status(400).json({
+            error: 'Bad Request',
+            message: `Invalid implementationStatus. Must be one of: ${validStatuses.join(', ')}`,
+            timestamp: new Date().toISOString()
+          });
+        }
+      }
+
+      const workItem = await workItemService.getWorkItem(id);
+      if (!workItem) {
+        return res.status(404).json({
+          error: 'Not Found',
+          message: `Work item with ID ${id} not found`,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      // Build update payload
+      const updates: Record<string, any> = {};
+      if (title !== undefined) updates.title = title.trim();
+      if (description !== undefined) updates.description = description.trim();
+      if (implementationStatus !== undefined) updates.implementationStatus = implementationStatus;
+      if (deliverableType !== undefined) updates.deliverableType = deliverableType.toLowerCase();
+
+      // Persist via repository
+      const workItemRepository = serviceFactory.getService<any>('IWorkItemRepository');
+      const saved = await workItemRepository.update(id, updates);
+
+      res.json({
+        data: saved.toJSON(),
+        message: 'Work item updated successfully',
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PUT /work-items/:id/position - Update work item position on canvas
+   */
+  router.put('/:id/position', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const workItemService = serviceFactory.getService<WorkItemService>('WorkItemService');
+      const { id } = req.params;
+      const { x, y } = req.body;
+
+      if (!id || typeof id !== 'string') {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'Work item ID is required',
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      if (typeof x !== 'number' || typeof y !== 'number') {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'x and y coordinates are required and must be numbers',
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      // Get the work item first to confirm it exists
+      const workItem = await workItemService.getWorkItem(id);
+      if (!workItem) {
+        return res.status(404).json({
+          error: 'Not Found',
+          message: `Work item with ID ${id} not found`,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      // Store position in spec metadata
+      const updatedSpec = { ...workItem.spec, _position: { x, y } };
+      // Use repository directly for position updates (lightweight, no audit needed)
+      const workItemRepository = serviceFactory.getService<any>('IWorkItemRepository');
+      const updated = await workItemRepository.update(id, { spec: updatedSpec });
+
+      res.json({
+        data: updated.toJSON(),
+        message: 'Position updated successfully',
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * PUT /work-items/:id/readiness - Update readiness dimension
    */
   router.put('/:id/readiness', async (req: Request, res: Response, next: NextFunction) => {
@@ -221,7 +359,7 @@ export function workItemRoutes(serviceFactory: ServiceFactory): Router {
 
       const updatedWorkItem = await workItemService.updateReadiness(
         id,
-        dimension as keyof ReadinessState,
+        dimension as ReadinessDimensionKey,
         value as ReadinessDimension
       );
 

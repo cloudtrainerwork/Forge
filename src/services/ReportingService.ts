@@ -286,7 +286,7 @@ export class ReportingService {
    */
   async getScreenReadinessReport(screenGroupId: string): Promise<ScreenReadinessReport> {
     try {
-      const screenGroup = await this.groupingService.getGroupById(screenGroupId);
+      const screenGroup = this.groupingService.getGroups().get(screenGroupId);
       if (!screenGroup) {
         throw new Error(`Screen group ${screenGroupId} not found`);
       }
@@ -349,7 +349,7 @@ export class ReportingService {
    */
   async getSprintReadinessReport(sprintId: string): Promise<SprintReadinessReport> {
     try {
-      const sprint = await this.sprintService.getSprintById(sprintId);
+      const sprint = this.sprintService.getSprints().get(sprintId);
       if (!sprint) {
         throw new Error(`Sprint ${sprintId} not found`);
       }
@@ -361,7 +361,7 @@ export class ReportingService {
       // Get screen groups for this sprint
       const screenGroups: ScreenGroupSprintInfo[] = [];
       for (const groupId of sprint.plannedGroupIds) {
-        const group = await this.groupingService.getGroupById(groupId);
+        const group = this.groupingService.getGroups().get(groupId);
         if (group) {
           const groupReport = await this.getScreenReadinessReport(groupId);
           screenGroups.push({
@@ -406,12 +406,12 @@ export class ReportingService {
         },
         screenGroups,
         blockers: blockers.map(b => ({
-          workItemId: b.workItemId,
-          title: b.title,
-          dimension: b.dimension as ReadinessDimensionKey,
-          reason: b.reason,
-          daysSinceBlocked: b.daysSinceBlocked,
-          impact: b.impact as 'low' | 'medium' | 'high' | 'critical'
+          workItemId: b.id,
+          title: b.description,
+          dimension: b.type as unknown as ReadinessDimensionKey,
+          reason: b.suggestedResolution,
+          daysSinceBlocked: b.estimatedResolutionTime,
+          impact: b.severity as 'low' | 'medium' | 'high' | 'critical'
         })),
         risks: await this.assessSprintRisks(sprintId, overallCompletion, onTrack)
       };
@@ -548,7 +548,7 @@ export class ReportingService {
    */
   async aggregateByGroup(): Promise<ScreenGroupReadinessInfo[]> {
     try {
-      const groups = await this.groupingService.getAllGroups();
+      const groups = Array.from(this.groupingService.getGroups().values());
       const groupInfo: ScreenGroupReadinessInfo[] = [];
 
       for (const group of groups) {
@@ -560,8 +560,8 @@ export class ReportingService {
           totalWorkItems: report.summary.totalWorkItems,
           readyItems: report.summary.readyItems,
           blockedItems: report.summary.blockedItems,
-          sprintId: group.assignedSprintId,
-          priority: group.priority || 0
+          sprintId: (group as any).assignedSprintId,
+          priority: (group as any).priority || 0
         });
       }
 
@@ -576,7 +576,7 @@ export class ReportingService {
    */
   async aggregateBySprint(): Promise<SprintReadinessInfo[]> {
     try {
-      const sprints = await this.sprintService.getAllSprints();
+      const sprints = Array.from(this.sprintService.getSprints().values());
       const sprintInfo: SprintReadinessInfo[] = [];
 
       for (const sprint of sprints) {
@@ -800,7 +800,8 @@ export class ReportingService {
     // This would fetch all work items from the repository
     // Implementation depends on the repository interface
     try {
-      return await this.workItemRepository.findAll();
+      const result = await this.workItemRepository.findAll();
+      return result.items;
     } catch (error) {
       console.warn('Could not fetch all work items, returning empty array');
       return [];
@@ -809,7 +810,8 @@ export class ReportingService {
 
   private async getWorkItemsForScreenGroup(screenGroupId: string): Promise<WorkItem[]> {
     try {
-      return await this.workItemRepository.findByScreenGroupId(screenGroupId);
+      const result = await this.workItemRepository.findAll();
+      return result.items.filter(item => item.groupId === screenGroupId);
     } catch (error) {
       console.warn(`Could not fetch work items for screen group ${screenGroupId}`);
       return [];
@@ -1030,7 +1032,12 @@ export class ReportingService {
 
   private async getScreenGroupForWorkItem(workItemId: string): Promise<ScreenGroup | null> {
     try {
-      return await this.groupingService.getGroupForWorkItem(workItemId);
+      // Find the work item to get its groupId, then look up the group
+      const workItem = await this.workItemRepository.findById(workItemId);
+      if (workItem?.groupId) {
+        return this.groupingService.getGroups().get(workItem.groupId) || null;
+      }
+      return null;
     } catch {
       return null;
     }
@@ -1038,7 +1045,7 @@ export class ReportingService {
 
   private estimateItemDuration(item: WorkItem): number {
     // Simplified duration estimation based on complexity
-    const complexity = item.specification?.complexity || 'medium';
+    const complexity = (item.spec as any)?.complexity || 'medium';
     const baseDuration = { simple: 3, medium: 5, complex: 8 };
     return baseDuration[complexity as keyof typeof baseDuration] || 5;
   }

@@ -1,16 +1,34 @@
 import { IsString, IsOptional, IsObject, IsNotEmpty, IsEnum, validateOrReject } from 'class-validator';
 import { Expose, Transform, Type } from 'class-transformer';
-import { ReadinessState, ReadinessDimension } from './ReadinessState.js';
+import { ReadinessState, ReadinessDimension, ReadinessDimensionKey } from './ReadinessState.js';
 
 export enum DeliverableType {
+  GENERIC = 'generic',
+  FEATURE = 'feature',
   SCREEN = 'screen',
   SERVICE = 'service',
+  INTEGRATION = 'integration',
   DTO = 'dto',
   TEST = 'test',
   COMPONENT = 'component',
   API = 'api',
   DATABASE = 'database',
-  DOCUMENTATION = 'documentation'
+  DOCUMENTATION = 'documentation',
+  CONFIG = 'config',
+  VIEWMODEL = 'viewmodel',
+  MANAGER = 'manager',
+}
+
+/**
+ * Implementation status tracks how "built" a work item is (Harvey ball levels).
+ * Independent of the 6-dimensional planning readiness.
+ */
+export enum ImplementationStatus {
+  NOT_STARTED = 'NOT_STARTED',
+  STUBBED = 'STUBBED',
+  PARTIAL = 'PARTIAL',
+  FUNCTIONAL = 'FUNCTIONAL',
+  PRODUCTION = 'PRODUCTION',
 }
 
 /**
@@ -22,6 +40,11 @@ export class WorkItem {
   @IsNotEmpty()
   @Expose()
   id: string;
+
+  @IsString()
+  @IsOptional()
+  @Expose()
+  tenantId?: string;
 
   @IsString()
   @IsOptional()
@@ -63,6 +86,11 @@ export class WorkItem {
   @Expose()
   deliverableType?: DeliverableType; // Type of deliverable this work item represents
 
+  @IsEnum(ImplementationStatus)
+  @IsOptional()
+  @Expose()
+  implementationStatus: ImplementationStatus; // Harvey ball: how "built" is this item
+
   @Expose()
   @Transform(({ value }) => value instanceof Date ? value : new Date(value))
   createdAt: Date;
@@ -82,9 +110,12 @@ export class WorkItem {
     parentId?: string,
     deliverableType?: DeliverableType,
     createdAt?: Date,
-    updatedAt?: Date
+    updatedAt?: Date,
+    tenantId?: string,
+    implementationStatus?: ImplementationStatus,
   ) {
     this.id = id;
+    this.tenantId = tenantId;
     this.title = title;
     this.description = description;
     this.spec = spec || {};
@@ -93,6 +124,7 @@ export class WorkItem {
     this.sprintId = sprintId;
     this.parentId = parentId;
     this.deliverableType = deliverableType;
+    this.implementationStatus = implementationStatus || ImplementationStatus.NOT_STARTED;
     this.createdAt = createdAt || new Date();
     this.updatedAt = updatedAt || new Date();
   }
@@ -139,7 +171,7 @@ export class WorkItem {
    * Update a specific readiness dimension
    * Returns new instance to maintain immutability
    */
-  updateReadiness(dimension: keyof ReadinessState, value: ReadinessDimension): WorkItem {
+  updateReadiness(dimension: ReadinessDimensionKey, value: ReadinessDimension): WorkItem {
     const updatedReadiness = this.readiness.updateDimension(dimension, value);
     return new WorkItem(
       this.id,
@@ -152,7 +184,9 @@ export class WorkItem {
       this.parentId,
       this.deliverableType,
       this.createdAt,
-      new Date() // Update timestamp
+      new Date(),
+      this.tenantId,
+      this.implementationStatus,
     );
   }
 
@@ -172,7 +206,9 @@ export class WorkItem {
       this.parentId,
       this.deliverableType,
       this.createdAt,
-      new Date() // Update timestamp
+      new Date(),
+      this.tenantId,
+      this.implementationStatus,
     );
   }
 
@@ -192,7 +228,9 @@ export class WorkItem {
       this.parentId,
       this.deliverableType,
       this.createdAt,
-      new Date() // Update timestamp
+      new Date(),
+      this.tenantId,
+      this.implementationStatus,
     );
   }
 
@@ -217,7 +255,31 @@ export class WorkItem {
       parentId ?? this.parentId,
       deliverableType ?? this.deliverableType,
       this.createdAt,
-      new Date() // Update timestamp
+      new Date(),
+      this.tenantId,
+      this.implementationStatus,
+    );
+  }
+
+  /**
+   * Update implementation status (Harvey ball level)
+   * Returns new instance to maintain immutability
+   */
+  updateImplementationStatus(status: ImplementationStatus): WorkItem {
+    return new WorkItem(
+      this.id,
+      this.spec,
+      this.title,
+      this.description,
+      this.readiness,
+      this.groupId,
+      this.sprintId,
+      this.parentId,
+      this.deliverableType,
+      this.createdAt,
+      new Date(),
+      this.tenantId,
+      status,
     );
   }
 
@@ -253,16 +315,22 @@ export class WorkItem {
    * Convert to plain object for storage/serialization
    */
   toJSON() {
+    const pos = this.spec?._position as { x?: number; y?: number } | undefined;
     return {
       id: this.id,
+      tenantId: this.tenantId,
       title: this.title,
       description: this.description,
       spec: this.spec,
+      x: pos?.x ?? null,
+      y: pos?.y ?? null,
       readiness: this.readiness.toJSON(),
+      type: this.deliverableType ? this.deliverableType.toUpperCase() : null,
       groupId: this.groupId,
       sprintId: this.sprintId,
-      parentId: this.parentId,
+      parentId: this.parentId || null,
       deliverableType: this.deliverableType,
+      implementationStatus: this.implementationStatus,
       createdAt: this.createdAt.toISOString(),
       updatedAt: this.updatedAt.toISOString(),
     };
@@ -283,7 +351,9 @@ export class WorkItem {
       data.parentId,
       data.deliverableType,
       new Date(data.createdAt),
-      new Date(data.updatedAt)
+      new Date(data.updatedAt),
+      data.tenantId,
+      data.implementationStatus as ImplementationStatus || ImplementationStatus.NOT_STARTED,
     );
   }
 
@@ -295,9 +365,11 @@ export class WorkItem {
     title: string,
     spec: Record<string, any> = {},
     description?: string,
-    deliverableType?: DeliverableType
+    deliverableType?: DeliverableType,
+    tenantId?: string,
+    implementationStatus?: ImplementationStatus,
   ): WorkItem {
-    return new WorkItem(id, spec, title, description, undefined, undefined, undefined, undefined, deliverableType);
+    return new WorkItem(id, spec, title, description, undefined, undefined, undefined, undefined, deliverableType, undefined, undefined, tenantId, implementationStatus);
   }
 
   /**

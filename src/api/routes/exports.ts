@@ -77,9 +77,10 @@ export default function exportsRoutes(serviceFactory: ServiceFactory): Router {
           });
         }
 
-        // Empty specification or too incomplete
+        // Empty specification, too incomplete, or export blocked
         if (error.message.includes('empty specification') ||
-            error.message.includes('too incomplete')) {
+            error.message.includes('too incomplete') ||
+            error.message.includes('Export blocked')) {
           return res.status(400).json({
             error: 'Bad Request',
             message: error.message,
@@ -204,6 +205,49 @@ export default function exportsRoutes(serviceFactory: ServiceFactory): Router {
       res.status(500).json({
         error: 'Internal Server Error',
         message: 'Failed to get export metadata',
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
+  /**
+   * GET /api/exports/gsd/:workItemId/preview
+   * EXPORT-03: Preview GSD export before downloading
+   * Returns the generated plan as readable JSON with XML preview
+   */
+  router.get('/gsd/:workItemId/preview', async (req: Request, res: Response) => {
+    try {
+      const { workItemId } = req.params;
+
+      if (!workItemId || typeof workItemId !== 'string' || workItemId.trim().length === 0) {
+        return res.status(400).json({
+          error: 'Valid work item ID is required',
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      const exportService = serviceFactory.getExportService();
+      const preview = await exportService.previewGSDExport(workItemId.trim());
+
+      res.json({
+        data: preview,
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error) {
+      console.error('Error generating export preview:', error);
+
+      if (error instanceof Error && error.message.includes('not found')) {
+        return res.status(404).json({
+          error: 'Not Found',
+          message: error.message,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      res.status(500).json({
+        error: 'Internal Server Error',
+        message: 'Failed to generate export preview',
         timestamp: new Date().toISOString()
       });
     }

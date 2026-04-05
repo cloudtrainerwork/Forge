@@ -165,7 +165,7 @@ function ForgeDetailFlowEnhanced({ screenId, screenName, onSave }: ForgeDetailVi
   const memoryCheckInterval = useRef<ReturnType<typeof setInterval>>();
 
   // Measure render performance (client-side only)
-  const measureRenderTime = useCallback((start: number, operation: string) => {
+  const measureRenderTime = useCallback((start: number, operation: string, nodeCount: number = 0) => {
     if (typeof window === 'undefined') return 0;
 
     const duration = performance.now() - start;

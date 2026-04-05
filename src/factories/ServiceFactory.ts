@@ -3,16 +3,24 @@ import { PrismaClient } from '@prisma/client';
 import { Driver } from 'neo4j-driver';
 import { WorkItemRepository } from '../infrastructure/postgresql/WorkItemRepository.js';
 import { ReadinessRepository } from '../infrastructure/postgresql/ReadinessRepository.js';
+import { AuthRepository } from '../infrastructure/postgresql/AuthRepository.js';
+import { ProjectRepository } from '../infrastructure/postgresql/ProjectRepository.js';
 import { GraphRepository } from '../infrastructure/neo4j/GraphRepository.js';
 import { WorkItemService } from '../services/WorkItemService.js';
 import { ReadinessService } from '../services/ReadinessService.js';
 import { AuditTrailService } from '../services/AuditTrailService.js';
+import { AuthService } from '../services/AuthService.js';
+import { ProjectService } from '../services/ProjectService.js';
+import { PermissionService } from '../services/PermissionService.js';
 import { GroupingService } from '../services/GroupingService.js';
 import { SprintService } from '../services/SprintService.js';
 import { SpecificationService } from '../services/SpecificationService.js';
 import { ExportService } from '../services/ExportService.js';
 import { GSDXmlGenerator } from '../services/GSDXmlGenerator.js';
+import { JwtService } from '../auth/JwtService.js';
 import type { IWorkItemRepository } from '../adapters/IWorkItemRepository.js';
+import type { IAuthRepository } from '../adapters/IAuthRepository.js';
+import type { IProjectRepository } from '../adapters/IProjectRepository.js';
 import type { IGraphRepository } from '../adapters/IGraphRepository.js';
 import type { ISpecificationService } from '../adapters/ISpecificationService.js';
 import type { IExportService } from '../adapters/IExportService.js';
@@ -62,6 +70,37 @@ export class ServiceFactory {
         const driver = context.container.get<Driver>('Neo4jDriver');
         return new GraphRepository(driver);
       })
+      .inSingletonScope();
+
+    this.container.bind<IAuthRepository>('IAuthRepository')
+      .toDynamicValue((context) => {
+        const prisma = context.container.get<PrismaClient>('PrismaClient');
+        return new AuthRepository(prisma);
+      })
+      .inSingletonScope();
+
+    this.container.bind<IProjectRepository>('IProjectRepository')
+      .toDynamicValue((context) => {
+        const prisma = context.container.get<PrismaClient>('PrismaClient');
+        return new ProjectRepository(prisma);
+      })
+      .inSingletonScope();
+
+    // Bind auth services
+    this.container.bind<JwtService>('JwtService')
+      .to(JwtService)
+      .inSingletonScope();
+
+    this.container.bind<AuthService>('AuthService')
+      .to(AuthService)
+      .inSingletonScope();
+
+    this.container.bind<ProjectService>('ProjectService')
+      .to(ProjectService)
+      .inSingletonScope();
+
+    this.container.bind<PermissionService>('PermissionService')
+      .to(PermissionService)
       .inSingletonScope();
 
     // Bind services with their dependencies

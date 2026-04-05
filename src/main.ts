@@ -62,9 +62,20 @@ async function main(): Promise<void> {
       }
     );
 
-    // Test Neo4j connection
-    await neo4jDriver.verifyConnectivity();
-    console.log('✅ Neo4j connected successfully');
+    // Test Neo4j connection (retry — container may still be starting)
+    const NEO4J_MAX_RETRIES = 10;
+    const NEO4J_RETRY_DELAY_MS = 3000;
+    for (let attempt = 1; attempt <= NEO4J_MAX_RETRIES; attempt++) {
+      try {
+        await neo4jDriver.verifyConnectivity();
+        console.log('✅ Neo4j connected successfully');
+        break;
+      } catch (err) {
+        if (attempt === NEO4J_MAX_RETRIES) throw err;
+        console.log(`⏳ Neo4j not ready (attempt ${attempt}/${NEO4J_MAX_RETRIES}), retrying in ${NEO4J_RETRY_DELAY_MS / 1000}s...`);
+        await new Promise(r => setTimeout(r, NEO4J_RETRY_DELAY_MS));
+      }
+    }
 
     // Configure IoC container
     console.log('🔧 Configuring dependency injection container...');

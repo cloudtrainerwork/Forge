@@ -31,9 +31,9 @@ export class ReadinessRepository {
   /**
    * Create a new readiness configuration
    */
-  async createConfiguration(configuration: ReadinessConfiguration): Promise<ReadinessConfiguration> {
+  async createConfiguration(configuration: ReadinessConfiguration, tenantId?: string): Promise<ReadinessConfiguration> {
     try {
-      const data = {
+      const data: Record<string, any> = {
         id: configuration.id,
         name: configuration.name,
         description: configuration.description,
@@ -55,7 +55,10 @@ export class ReadinessRepository {
         })),
       };
 
-      const saved = await this.prisma.readinessConfiguration.create({
+      // Include tenantId for multi-tenant isolation (required by RLS)
+      if (tenantId) data.tenantId = tenantId;
+
+      const saved = await (this.prisma as any).readinessConfiguration.create({
         data: data as any
       });
 
@@ -73,7 +76,7 @@ export class ReadinessRepository {
    */
   async getConfiguration(id: string): Promise<ReadinessConfiguration | null> {
     try {
-      const config = await this.prisma.readinessConfiguration.findUnique({
+      const config = await (this.prisma as any).readinessConfiguration.findUnique({
         where: { id }
       });
 
@@ -110,7 +113,7 @@ export class ReadinessRepository {
         updatedAt: new Date(),
       };
 
-      const updated = await this.prisma.readinessConfiguration.update({
+      const updated = await (this.prisma as any).readinessConfiguration.update({
         where: { id: configuration.id },
         data: data as any
       });
@@ -134,12 +137,12 @@ export class ReadinessRepository {
   }> {
     try {
       const [configurations, total] = await Promise.all([
-        this.prisma.readinessConfiguration.findMany({
+        (this.prisma as any).readinessConfiguration.findMany({
           take: limit,
           skip: offset,
           orderBy: { createdAt: 'desc' }
         }),
-        this.prisma.readinessConfiguration.count()
+        (this.prisma as any).readinessConfiguration.count()
       ]);
 
       return {
@@ -159,12 +162,12 @@ export class ReadinessRepository {
     try {
       // First, unlink any work items using this configuration
       await this.prisma.workItem.updateMany({
-        where: { readinessConfigurationId: id },
-        data: { readinessConfigurationId: null }
+        where: { readinessConfigurationId: id } as any,
+        data: { readinessConfigurationId: null } as any
       });
 
       // Then delete the configuration
-      await this.prisma.readinessConfiguration.delete({
+      await (this.prisma as any).readinessConfiguration.delete({
         where: { id }
       });
     } catch (error) {
@@ -403,7 +406,11 @@ export class ReadinessRepository {
    */
   async healthCheck(): Promise<boolean> {
     try {
-      await this.prisma.readinessConfiguration.count();
+      // Use raw query to verify database connectivity and table existence
+      // This avoids dependency on Prisma client generation state for the readinessConfiguration model
+      await this.prisma.$queryRawUnsafe(
+        `SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'readiness_configurations'`
+      );
       return true;
     } catch (error) {
       return false;

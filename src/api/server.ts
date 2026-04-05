@@ -2,13 +2,19 @@ import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import { PrismaClient } from '@prisma/client';
 import { workItemRoutes } from './routes/workItems.js';
 import { readinessRoutes } from './routes/readiness.js';
 import exportsRoutes from './routes/exports.js';
 import groupingRoutes from './routes/grouping.js';
 import sprintsRoutes from './routes/sprints.js';
 import specificationsRoutes from './routes/specifications.js';
+import authRoutes from './routes/auth.js';
+import projectRoutes from './routes/projects.js';
+import adminRoutes from './routes/admin.js';
+import dependencyRoutes from './routes/dependencies.js';
 import { ServiceFactory } from '../factories/ServiceFactory.js';
+import { createAuthMiddleware } from '../middleware/authMiddleware.js';
 
 /**
  * Express server with middleware for JSON parsing, CORS, and error handling
@@ -60,37 +66,86 @@ export class ApiServer {
 
   /**
    * Setup API routes with dependency injection
+   *
+   * Route structure:
+   *   /health                        — public health check
+   *   /api/v1/auth/*                 — public auth routes (no JWT needed)
+   *   /api/v1/t/:tenantSlug/*        — tenant-scoped, protected routes
    */
   private setupRoutes(): void {
-    // Health check endpoint
+    // Health check endpoint (public)
     this.app.get('/health', this.healthCheck.bind(this));
 
-    // API version prefix
-    const apiRouter = express.Router();
+    // ── Public auth routes (no JWT required) ──────────────────────────────
+    this.app.use('/api/v1/auth', authRoutes(this.serviceFactory));
+
+    // ── Auth middleware setup ──────────────────────────────────────────────
+    const authMiddleware = createAuthMiddleware(this.serviceFactory);
+    const prisma = this.serviceFactory.getService<PrismaClient>('PrismaClient');
+
+    // ── Tenant-scoped protected routes ────────────────────────────────────
+    const tenantRouter = express.Router({ mergeParams: true });
 
     // Work item routes with service injection
-    apiRouter.use('/work-items', workItemRoutes(this.serviceFactory));
+    tenantRouter.use('/work-items', workItemRoutes(this.serviceFactory));
 
     // Readiness routes with service injection
-    apiRouter.use('/readiness', readinessRoutes(this.serviceFactory));
+    tenantRouter.use('/readiness', readinessRoutes(this.serviceFactory));
 
     // Mount readiness routes directly for convenience
-    apiRouter.use('/', readinessRoutes(this.serviceFactory));
+    tenantRouter.use('/', readinessRoutes(this.serviceFactory));
 
     // Exports routes with service injection
-    apiRouter.use('/exports', exportsRoutes(this.serviceFactory));
+    tenantRouter.use('/exports', exportsRoutes(this.serviceFactory));
 
     // Grouping routes
-    apiRouter.use('/', groupingRoutes);
+    tenantRouter.use('/', groupingRoutes);
 
     // Sprint routes
-    apiRouter.use('/', sprintsRoutes);
+    tenantRouter.use('/', sprintsRoutes);
 
     // Specifications routes with service injection
-    apiRouter.use('/specifications', specificationsRoutes(this.serviceFactory));
+    tenantRouter.use('/specifications', specificationsRoutes(this.serviceFactory));
 
-    // Mount API router
-    this.app.use('/api/v1', apiRouter);
+    // Dependency routes (graph edges)
+    tenantRouter.use('/dependencies', dependencyRoutes(this.serviceFactory));
+
+    // Project routes
+    tenantRouter.use('/projects', projectRoutes(this.serviceFactory));
+
+    // Admin routes (tenant management)
+    tenantRouter.use('/admin', adminRoutes(this.serviceFactory));
+
+    // Mount tenant-scoped router with auth chain:
+    //   extractToken → requireAuth → requireTenant (sets RLS) → routes
+    this.app.use(
+      '/api/v1/t/:tenantSlug',
+      ...authMiddleware.requireAuthentication,
+      authMiddleware.createTenantResolver(prisma),
+      tenantRouter,
+    );
+
+    // ── Legacy unscoped routes (backward-compat, still require auth) ──────
+    // These use JWT tenant context instead of URL slug
+    const legacyRouter = express.Router();
+    legacyRouter.use('/work-items', workItemRoutes(this.serviceFactory));
+    legacyRouter.use('/readiness', readinessRoutes(this.serviceFactory));
+    legacyRouter.use('/', readinessRoutes(this.serviceFactory));
+    legacyRouter.use('/exports', exportsRoutes(this.serviceFactory));
+    legacyRouter.use('/', groupingRoutes);
+    legacyRouter.use('/', sprintsRoutes);
+    legacyRouter.use('/specifications', specificationsRoutes(this.serviceFactory));
+    legacyRouter.use('/dependencies', dependencyRoutes(this.serviceFactory));
+    legacyRouter.use('/projects', projectRoutes(this.serviceFactory));
+    legacyRouter.use('/admin', adminRoutes(this.serviceFactory));
+
+    this.app.use(
+      '/api/v1',
+      ...authMiddleware.requireAuthentication,
+      authMiddleware.createTenantResolver(prisma),
+      authMiddleware.authErrorHandler,
+      legacyRouter,
+    );
 
     // Root endpoint
     this.app.get('/', (_req: Request, res: Response) => {
@@ -100,13 +155,18 @@ export class ApiServer {
         status: 'running',
         endpoints: {
           health: '/health',
-          workItems: '/api/v1/work-items',
-          readiness: '/api/v1/readiness',
-          exports: '/api/v1/exports',
-          groups: '/api/v1/groups',
-          sprints: '/api/v1/sprints',
-          specifications: '/api/v1/specifications'
-        }
+          auth: '/api/v1/auth',
+          tenantScoped: '/api/v1/t/{slug}/',
+          workItems: '/api/v1/t/{slug}/work-items',
+          readiness: '/api/v1/t/{slug}/readiness',
+          exports: '/api/v1/t/{slug}/exports',
+          groups: '/api/v1/t/{slug}/groups',
+          sprints: '/api/v1/t/{slug}/sprints',
+          specifications: '/api/v1/t/{slug}/specifications',
+          dependencies: '/api/v1/t/{slug}/dependencies',
+          projects: '/api/v1/t/{slug}/projects',
+          admin: '/api/v1/t/{slug}/admin',
+        },
       });
     });
 

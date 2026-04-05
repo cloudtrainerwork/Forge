@@ -718,10 +718,10 @@ export default function AnalyticsDashboard({
                 />
                 <Tooltip
                   cursor={{ strokeDasharray: '3 3' }}
-                  formatter={(value: any, name: string) => [
+                  formatter={(value: any, name?: string) => [
                     name === 'probability' ? `${(value * 100).toFixed(0)}%` : `${(value * 100).toFixed(0)}%`,
                     name === 'probability' ? 'Probability' : 'Impact'
-                  ]}
+                  ] as any}
                   labelFormatter={(label, payload) => {
                     if (payload && payload[0]) {
                       return payload[0].payload.name;

@@ -2,7 +2,9 @@ version: '3.8'
 
 services:
   neo4j:
-    image: neo4j:5.15
+    # Pin to exact patch version to prevent surprise upgrades.
+    # To find the current patch: docker pull neo4j:5.15 && docker image inspect neo4j:5.15 | grep -i version
+    image: neo4j:5.15.0
     container_name: forge-neo4j
     ports:
       - "7474:7474"  # HTTP interface
@@ -28,7 +30,9 @@ services:
     restart: unless-stopped
 
   postgres:
-    image: postgres:15
+    # Pin to exact patch version to prevent surprise upgrades.
+    # To find the current patch: docker pull postgres:15 && docker image inspect postgres:15 | grep -i version
+    image: postgres:15.12
     container_name: forge-postgres
     ports:
       - "5432:5432"

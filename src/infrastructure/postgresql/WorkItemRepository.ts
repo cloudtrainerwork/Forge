@@ -18,13 +18,21 @@ export class WorkItemRepository implements IWorkItemRepository {
       // Validate before saving
       await workItem.validate();
 
-      const data = {
+      const data: Record<string, any> = {
         id: workItem.id,
         title: workItem.title || null,
         description: workItem.description || null,
         spec: workItem.spec,
         readiness: workItem.readiness.toJSON(),
+        implementationStatus: workItem.implementationStatus || 'NOT_STARTED',
+        deliverableType: workItem.deliverableType || null,
+        parentId: workItem.parentId || null,
       };
+
+      // Include tenantId for new records (required column with RLS)
+      if (workItem.tenantId) {
+        data.tenantId = workItem.tenantId;
+      }
 
       // Check if work item exists
       const existing = await this.prisma.workItem.findUnique({
@@ -42,7 +50,7 @@ export class WorkItemRepository implements IWorkItemRepository {
           }
         });
 
-        // Log update
+        // Log update (include tenantId for RLS on audit_logs)
         await this.logStateChange(
           workItem.id,
           'WORK_ITEM_UPDATED',
@@ -59,7 +67,9 @@ export class WorkItemRepository implements IWorkItemRepository {
               spec: data.spec,
               readiness: data.readiness,
             }
-          }
+          },
+          {},
+          workItem.tenantId,
         );
       } else {
         // Create new
@@ -68,10 +78,10 @@ export class WorkItemRepository implements IWorkItemRepository {
             ...data,
             createdAt: workItem.createdAt,
             updatedAt: workItem.updatedAt,
-          }
+          } as any
         });
 
-        // Log creation
+        // Log creation (include tenantId for RLS on audit_logs)
         await this.logStateChange(
           workItem.id,
           'WORK_ITEM_CREATED',
@@ -82,7 +92,9 @@ export class WorkItemRepository implements IWorkItemRepository {
               spec: data.spec,
               readiness: data.readiness,
             }
-          }
+          },
+          {},
+          workItem.tenantId,
         );
       }
 
@@ -206,15 +218,21 @@ export class WorkItemRepository implements IWorkItemRepository {
         throw new Error('Work item not found');
       }
 
-      // Create updated work item
+      // Create updated work item (preserve tenantId from existing)
       const updated = new WorkItem(
         existing.id,
         updates.spec ?? existing.spec,
         updates.title ?? existing.title,
         updates.description ?? existing.description,
         updates.readiness ?? existing.readiness,
+        updates.groupId ?? existing.groupId,
+        updates.sprintId ?? existing.sprintId,
+        updates.parentId ?? existing.parentId,
+        updates.deliverableType ?? existing.deliverableType,
         existing.createdAt,
-        new Date()
+        new Date(),
+        existing.tenantId,
+        updates.implementationStatus ?? existing.implementationStatus,
       );
 
       return await this.save(updated);
@@ -298,19 +316,24 @@ export class WorkItemRepository implements IWorkItemRepository {
     entityId: string,
     type: 'WORK_ITEM_CREATED' | 'WORK_ITEM_UPDATED' | 'RELATIONSHIP_ADDED' | 'RELATIONSHIP_REMOVED' | 'READINESS_UPDATED',
     changes: Record<string, any>,
-    metadata: Record<string, any> = {}
+    metadata: Record<string, any> = {},
+    tenantId?: string,
+    actorId?: string,
   ): Promise<void> {
     try {
-      await this.prisma.auditLog.create({
-        data: {
-          type: type as AuditLogType,
-          entityId,
-          changes: {
-            ...changes,
-            metadata
-          }
-        }
-      });
+      const data: Record<string, any> = {
+        type: type as AuditLogType,
+        entityId,
+        changes: {
+          ...changes,
+          metadata
+        },
+      };
+      // Include tenantId if provided (required by RLS policy)
+      if (tenantId) data.tenantId = tenantId;
+      if (actorId) data.actorId = actorId;
+
+      await this.prisma.auditLog.create({ data: data as any });
     } catch (error) {
       throw new Error(`Failed to log state change: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -364,8 +387,14 @@ export class WorkItemRepository implements IWorkItemRepository {
       item.title || undefined,
       item.description || undefined,
       item.readiness ? ReadinessState.fromJSON(item.readiness) : undefined,
+      item.groupId || undefined,
+      item.sprintId || undefined,
+      item.parentId || undefined,
+      item.deliverableType || undefined,
       item.createdAt,
-      item.updatedAt
+      item.updatedAt,
+      item.tenantId || undefined,
+      (item.implementationStatus as any) || undefined,
     );
   }
 }

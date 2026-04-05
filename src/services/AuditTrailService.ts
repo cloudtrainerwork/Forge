@@ -10,7 +10,9 @@ export enum AuditEventType {
   WORK_ITEM_UPDATED = 'WORK_ITEM_UPDATED',
   RELATIONSHIP_ADDED = 'RELATIONSHIP_ADDED',
   RELATIONSHIP_REMOVED = 'RELATIONSHIP_REMOVED',
-  READINESS_UPDATED = 'READINESS_UPDATED'
+  READINESS_UPDATED = 'READINESS_UPDATED',
+  READINESS_CONFIG_CREATED = 'READINESS_CONFIG_CREATED',
+  READINESS_CONFIG_UPDATED = 'READINESS_CONFIG_UPDATED'
 }
 
 /**
@@ -86,7 +88,7 @@ export class AuditTrailService extends EventEmitter {
   /**
    * Handle WORK_ITEM_CREATED events
    */
-  private async handleWorkItemCreated(event: WorkItemCreatedEvent): Promise<void> {
+  private async handleWorkItemCreated(event: WorkItemCreatedEvent & { tenantId?: string }): Promise<void> {
     try {
       await this.workItemRepository.logStateChange(
         event.workItemId,
@@ -101,10 +103,12 @@ export class AuditTrailService extends EventEmitter {
           eventType: AuditEventType.WORK_ITEM_CREATED,
           timestamp: new Date().toISOString(),
           source: 'WorkItemService'
-        }
+        },
+        event.tenantId
       );
     } catch (error) {
-      this.emit('error', new Error(`Failed to log work item created event: ${error instanceof Error ? error.message : 'Unknown error'}`));
+      // Audit log failures should not crash the application
+      console.warn(`[AuditTrail] Failed to log WORK_ITEM_CREATED for ${event.workItemId}: ${error instanceof Error ? error.message : 'Unknown'}`);
     }
   }
 
@@ -125,17 +129,19 @@ export class AuditTrailService extends EventEmitter {
           eventType: AuditEventType.WORK_ITEM_UPDATED,
           timestamp: new Date().toISOString(),
           source: 'WorkItemService'
-        }
+        },
+        event.tenantId
       );
     } catch (error) {
-      this.emit('error', new Error(`Failed to log work item updated event: ${error instanceof Error ? error.message : 'Unknown error'}`));
+      // Audit log failures should not crash the application
+      console.warn(`[AuditTrail] Failed to log WORK_ITEM_UPDATED for ${event.workItemId}: ${error instanceof Error ? error.message : 'Unknown'}`);
     }
   }
 
   /**
    * Handle RELATIONSHIP_ADDED events
    */
-  private async handleRelationshipAdded(event: RelationshipAddedEvent): Promise<void> {
+  private async handleRelationshipAdded(event: RelationshipAddedEvent & { tenantId?: string }): Promise<void> {
     try {
       await this.workItemRepository.logStateChange(
         event.fromWorkItemId,
@@ -152,17 +158,18 @@ export class AuditTrailService extends EventEmitter {
           eventType: AuditEventType.RELATIONSHIP_ADDED,
           timestamp: new Date().toISOString(),
           source: 'WorkItemService'
-        }
+        },
+        event.tenantId
       );
     } catch (error) {
-      this.emit('error', new Error(`Failed to log relationship added event: ${error instanceof Error ? error.message : 'Unknown error'}`));
+      console.warn(`[AuditTrail] Failed to log RELATIONSHIP_ADDED: ${error instanceof Error ? error.message : 'Unknown'}`);
     }
   }
 
   /**
    * Handle RELATIONSHIP_REMOVED events
    */
-  private async handleRelationshipRemoved(event: RelationshipRemovedEvent): Promise<void> {
+  private async handleRelationshipRemoved(event: RelationshipRemovedEvent & { tenantId?: string }): Promise<void> {
     try {
       await this.workItemRepository.logStateChange(
         event.fromWorkItemId,
@@ -176,17 +183,18 @@ export class AuditTrailService extends EventEmitter {
           eventType: AuditEventType.RELATIONSHIP_REMOVED,
           timestamp: new Date().toISOString(),
           source: 'WorkItemService'
-        }
+        },
+        event.tenantId
       );
     } catch (error) {
-      this.emit('error', new Error(`Failed to log relationship removed event: ${error instanceof Error ? error.message : 'Unknown error'}`));
+      console.warn(`[AuditTrail] Failed to log RELATIONSHIP_REMOVED: ${error instanceof Error ? error.message : 'Unknown'}`);
     }
   }
 
   /**
    * Handle READINESS_UPDATED events
    */
-  private async handleReadinessUpdated(event: ReadinessUpdatedEvent): Promise<void> {
+  private async handleReadinessUpdated(event: ReadinessUpdatedEvent & { tenantId?: string }): Promise<void> {
     try {
       await this.workItemRepository.logStateChange(
         event.workItemId,
@@ -202,10 +210,11 @@ export class AuditTrailService extends EventEmitter {
           eventType: AuditEventType.READINESS_UPDATED,
           timestamp: new Date().toISOString(),
           source: 'WorkItemService'
-        }
+        },
+        event.tenantId
       );
     } catch (error) {
-      this.emit('error', new Error(`Failed to log readiness updated event: ${error instanceof Error ? error.message : 'Unknown error'}`));
+      console.warn(`[AuditTrail] Failed to log READINESS_UPDATED: ${error instanceof Error ? error.message : 'Unknown'}`);
     }
   }
 
@@ -252,7 +261,7 @@ export class AuditTrailService extends EventEmitter {
    */
   async logStateChange(
     entityId: string,
-    type: 'WORK_ITEM_CREATED' | 'WORK_ITEM_UPDATED' | 'RELATIONSHIP_ADDED' | 'RELATIONSHIP_REMOVED' | 'READINESS_UPDATED',
+    type: 'WORK_ITEM_CREATED' | 'WORK_ITEM_UPDATED' | 'RELATIONSHIP_ADDED' | 'RELATIONSHIP_REMOVED' | 'READINESS_UPDATED' | 'READINESS_CONFIG_CREATED' | 'READINESS_CONFIG_UPDATED',
     changes: Record<string, any>,
     metadata: Record<string, any> = {}
   ): Promise<void> {

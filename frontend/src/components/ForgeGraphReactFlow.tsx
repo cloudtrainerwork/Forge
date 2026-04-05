@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useParams } from 'next/navigation';
 import ReactFlow, {
   Node,
   Edge,
@@ -13,6 +14,7 @@ import ReactFlow, {
   Connection,
   addEdge,
   MiniMap,
+  MarkerType,
   useReactFlow,
   ReactFlowProvider,
   Handle,
@@ -20,11 +22,64 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useNavigationStore } from '@/stores/navigationStore';
+import { useCanvasStore } from '@/stores/canvasStore';
 import TemplateSelector from './TemplateSelector';
 import ProjectNavigator from './ProjectNavigator';
+import { SpecificationEditor } from './specifications/SpecificationEditor';
 import { WORKFLOW_TEMPLATES } from '@/data/workflowTemplates';
 
-// FORGE color palette
+// ── Services ───────────────────────────────────────────────────────────────────
+import {
+  WorkItemService,
+  DependencyService,
+  SpecificationService,
+} from '../services';
+import type { WorkItemDTO, ReadinessState } from '../services';
+
+// ── Local project type for canvas state (graph data stored in localStorage) ──
+interface LocalProject {
+  id: string;
+  name: string;
+  templateId?: string;
+  nodes?: Node[];
+  edges?: Edge[];
+}
+
+const LOCAL_STORAGE_KEY = 'forgeProjects';
+
+function loadLocalProjects(): LocalProject[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as LocalProject[];
+  } catch { return []; }
+}
+
+function saveLocalProjects(projects: LocalProject[]): void {
+  try { localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(projects)); } catch {}
+}
+
+function addLocalProject(project: LocalProject): LocalProject[] {
+  const all = loadLocalProjects();
+  const updated = [...all, project];
+  saveLocalProjects(updated);
+  return updated;
+}
+
+function updateLocalGraph(projectId: string, nodes: Node[], edges: Edge[]): LocalProject[] {
+  const all = loadLocalProjects();
+  const updated = all.map(p => p.id === projectId ? { ...p, nodes, edges } : p);
+  saveLocalProjects(updated);
+  return updated;
+}
+
+function removeLocalProject(projectId: string): LocalProject[] {
+  const all = loadLocalProjects().filter(p => p.id !== projectId);
+  saveLocalProjects(all);
+  return all;
+}
+
+// ── Color palette ──────────────────────────────────────────────────────────────
 const C = {
   bg: "#08090d",
   surface: "#111219",
@@ -51,18 +106,78 @@ const C = {
   cyanDim: "#06b6d420",
 };
 
-// Node types with icons
+// ── Node type config ───────────────────────────────────────────────────────────
 const NTYPES = {
-  FEATURE: { label: "Feature", color: C.accent, icon: "◆" },
-  SERVICE: { label: "Service", color: C.blue, icon: "⬡" },
-  SCREEN: { label: "Screen", color: C.purple, icon: "◻" },
-  INTEGRATION: { label: "Integration", color: C.cyan, icon: "⬢" },
-  DATABASE: { label: "Database", color: C.textMuted, icon: "⬈" },
-  API: { label: "API", color: C.green, icon: "◇" },
-  COMPONENT: { label: "Component", color: C.yellow, icon: "▣" },
+  GENERIC:     { label: "Generic",     color: C.textMuted, icon: "○" },
+  FEATURE:     { label: "Feature",     color: C.accent,   icon: "◆" },
+  SERVICE:     { label: "Service",     color: C.blue,     icon: "⬡" },
+  SCREEN:      { label: "Screen",      color: C.purple,   icon: "◻" },
+  INTEGRATION: { label: "Integration", color: C.cyan,     icon: "⬢" },
+  DATABASE:    { label: "Database",    color: C.textMuted, icon: "⬈" },
+  API:         { label: "API",         color: C.green,    icon: "◇" },
+  COMPONENT:   { label: "Component",   color: C.yellow,   icon: "▣" },
+  DTO:         { label: "DTO",         color: "#8b5cf6",  icon: "⬦" },
+  TEST:        { label: "Test",        color: "#14b8a6",  icon: "✓" },
+  CONFIG:      { label: "Config",      color: "#6b7280",  icon: "⚙" },
+  DOCUMENT:    { label: "Document",    color: "#d97706",  icon: "📄" },
+  VIEWMODEL:   { label: "ViewModel",   color: "#ec4899",  icon: "◈" },
+  MANAGER:     { label: "Manager",     color: "#7c3aed",  icon: "◉" },
 };
 
-// Types
+// ── Implementation Status (Harvey Ball) ────────────────────────────────────────
+const IMPL_STATUS = {
+  NOT_STARTED: { label: 'Not Started', pct: 0,    color: C.textDim },
+  STUBBED:     { label: 'Stubbed',     pct: 25,   color: C.yellow },
+  PARTIAL:     { label: 'Partial',     pct: 50,   color: C.yellow },
+  FUNCTIONAL:  { label: 'Functional',  pct: 75,   color: C.blue },
+  PRODUCTION:  { label: 'Production',  pct: 100,  color: C.green },
+} as const;
+
+type ImplStatusKey = keyof typeof IMPL_STATUS;
+const IMPL_STATUS_ORDER: ImplStatusKey[] = ['NOT_STARTED', 'STUBBED', 'PARTIAL', 'FUNCTIONAL', 'PRODUCTION'];
+
+/** SVG Harvey ball — circle with fill proportional to status */
+function HarveyBall({ status, size = 16, onClick }: { status: ImplStatusKey; size?: number; onClick?: (e: React.MouseEvent) => void }) {
+  const cfg = IMPL_STATUS[status];
+  const r = size / 2 - 1;
+  const cx = size / 2;
+  const cy = size / 2;
+
+  // Quarter-based fill using pie slice path
+  const pct = cfg.pct / 100;
+  let fillPath = '';
+  if (pct === 0) {
+    fillPath = ''; // empty circle
+  } else if (pct >= 1) {
+    fillPath = `M ${cx},${cy} m -${r},0 a ${r},${r} 0 1,0 ${r * 2},0 a ${r},${r} 0 1,0 -${r * 2},0`; // full circle
+  } else {
+    // Pie slice from 12 o'clock position
+    const angle = pct * 2 * Math.PI;
+    const x = cx + r * Math.sin(angle);
+    const y = cy - r * Math.cos(angle);
+    const largeArc = pct > 0.5 ? 1 : 0;
+    fillPath = `M ${cx},${cy} L ${cx},${cy - r} A ${r},${r} 0 ${largeArc},1 ${x},${y} Z`;
+  }
+
+  return (
+    <svg
+      width={size}
+      height={size}
+      style={{ cursor: onClick ? 'pointer' : 'default', flexShrink: 0 }}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      aria-label={`Implementation: ${cfg.label} (${cfg.pct}%)`}
+    >
+      <title>{`${cfg.label} (${cfg.pct}%)`}</title>
+      {/* Background circle */}
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke={cfg.pct > 0 ? cfg.color : C.textDim} strokeWidth={1.5} />
+      {/* Fill */}
+      {fillPath && <path d={fillPath} fill={cfg.color} />}
+    </svg>
+  );
+}
+
+// ── Types ──────────────────────────────────────────────────────────────────────
 interface ForgeNodeData {
   id: string;
   type: keyof typeof NTYPES;
@@ -77,155 +192,212 @@ interface ForgeNodeData {
     Test: number;
   };
   confidence: string;
+  implementationStatus: ImplStatusKey;
 }
 
-interface ForgeEdgeData {
-  from: string;
-  to: string;
-  type: 'requires' | 'contains' | 'feeds-into';
+// ── AddNodeForm component (stateful, avoids form submission issues in ReactFlow) ─
+function AddNodeForm({ onAdd, onCancel }: {
+  onAdd: (label: string, nodeType: keyof typeof NTYPES, description?: string) => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [nodeType, setNodeType] = useState<keyof typeof NTYPES>('GENERIC');
+  const [desc, setDesc] = useState('');
+
+  const handleAdd = () => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    onAdd(trimmed, nodeType, desc.trim() || undefined);
+    setName(''); setDesc('');
+  };
+
+  return (
+    <>
+      <h3 className="text-sm font-bold mb-3" style={{ color: C.text }}>Add Node</h3>
+      <input value={name} onChange={e => setName(e.target.value)} placeholder="Node name *" maxLength={100}
+        className="w-full mb-2 px-2 py-1.5 rounded text-xs"
+        style={{ background: C.surfaceAlt, color: C.text, border: `1px solid ${C.border}`, outline: 'none' }}
+        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAdd(); } }}
+      />
+      <select value={nodeType} onChange={e => setNodeType(e.target.value as keyof typeof NTYPES)}
+        className="w-full mb-2 px-2 py-1.5 rounded text-xs"
+        style={{ background: C.surfaceAlt, color: C.text, border: `1px solid ${C.border}`, outline: 'none' }}
+      >
+        {Object.entries(NTYPES).filter(([k]) => k !== 'FEATURE').map(([key, val]) => (
+          <option key={key} value={key}>{val.icon} {val.label}</option>
+        ))}
+      </select>
+      <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Description (optional)" maxLength={200}
+        className="w-full mb-3 px-2 py-1.5 rounded text-xs"
+        style={{ background: C.surfaceAlt, color: C.text, border: `1px solid ${C.border}`, outline: 'none' }}
+        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAdd(); } }}
+      />
+      <div className="flex gap-2">
+        <button type="button" onClick={handleAdd}
+          className="flex-1 px-3 py-1.5 rounded text-xs font-medium"
+          style={{ background: C.green, color: 'white', border: 'none', cursor: 'pointer' }}
+        >Add</button>
+        <button type="button" onClick={onCancel}
+          className="flex-1 px-3 py-1.5 rounded text-xs font-medium"
+          style={{ background: C.surfaceAlt, color: C.textMuted, border: `1px solid ${C.border}`, cursor: 'pointer' }}
+        >Cancel</button>
+      </div>
+    </>
+  );
 }
 
-// Custom Node Component
-function ForgeNode({ data, onDrillDown }: { data: ForgeNodeData; onDrillDown?: (nodeId: string) => void }) {
+// ── ForgeNode component ────────────────────────────────────────────────────────
+function ForgeNode({
+  data,
+  selected,
+  onDrillDown,
+  onOpenSpec,
+  editingNodeId,
+  onStartEdit,
+  onFinishEdit,
+  onCycleImplStatus,
+}: {
+  data: ForgeNodeData;
+  selected?: boolean;
+  onDrillDown?: (nodeId: string) => void;
+  onOpenSpec?: (nodeId: string) => void;
+  editingNodeId?: string | null;
+  onStartEdit?: (nodeId: string, currentLabel: string) => void;
+  onFinishEdit?: (nodeId: string, newLabel: string) => void;
+  onCycleImplStatus?: (nodeId: string) => void;
+}) {
   const nodeType = NTYPES[data.type];
-  const readinessValues = Object.values(data.readiness);
+
+  // Live readiness from localStorage specs (updates each render)
+  const liveReadiness = SpecificationService.getReadinessForNode(data.id);
+  // Merge: prefer live values if any section has been written, else use template defaults
+  const hasLocalSpec = Object.values(liveReadiness).some(v => v > 0);
+  const readiness = hasLocalSpec ? liveReadiness : data.readiness;
+
+  const readinessValues = Object.values(readiness);
   const avgReadiness = readinessValues.reduce((a, b) => a + b, 0) / readinessValues.length;
 
-  // Debug logging removed - was causing console spam
-
   const statusConfig = {
-    READY: { label: "Ready", color: C.green, bg: C.greenDim },
+    READY:       { label: "Ready",       color: C.green,  bg: C.greenDim },
     IN_PROGRESS: { label: "In Progress", color: C.yellow, bg: C.yellowDim },
-    BLOCKED: { label: "Blocked", color: C.red, bg: C.redDim },
+    BLOCKED:     { label: "Blocked",     color: C.red,    bg: C.redDim },
   };
 
-  // Map old confidence values to new status
-  const statusMap: { [key: string]: keyof typeof statusConfig } = {
+  const statusMap: Record<string, keyof typeof statusConfig> = {
     COMMITTED: 'READY',
     BUBBLE: 'IN_PROGRESS',
-    DEFERRED: 'BLOCKED'
+    DEFERRED: 'BLOCKED',
   };
   const status = statusConfig[statusMap[data.confidence] || 'BLOCKED'];
-
-  const handleDrillDown = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (onDrillDown) {
-      onDrillDown(data.id);
-    }
-  };
 
   return (
     <div
       className="forge-node"
       style={{
         width: 180,
-        background: C.surface,
-        border: `1.5px solid ${nodeType.color}`,
+        background: selected ? C.hover : C.surface,
+        border: `${selected ? 2 : 1.5}px solid ${selected ? C.accent : nodeType.color}`,
         borderRadius: 8,
         padding: '8px 12px',
         fontSize: 12,
         fontFamily: 'system-ui, -apple-system, sans-serif',
         position: 'relative',
+        boxShadow: selected ? `0 0 12px ${C.accent}40, 0 0 4px ${C.accent}20` : 'none',
+        transition: 'border-color 0.15s, background 0.15s, box-shadow 0.15s',
       }}
     >
       {/* Connection Handles */}
-      <Handle
-        type="target"
-        position={Position.Left}
-        style={{
-          background: nodeType.color,
-          border: `2px solid ${C.surface}`,
-          width: 10,
-          height: 10,
-        }}
-      />
-      <Handle
-        type="source"
-        position={Position.Right}
-        style={{
-          background: nodeType.color,
-          border: `2px solid ${C.surface}`,
-          width: 10,
-          height: 10,
-        }}
-      />
-      <Handle
-        type="target"
-        position={Position.Top}
-        style={{
-          background: nodeType.color,
-          border: `2px solid ${C.surface}`,
-          width: 10,
-          height: 10,
-        }}
-      />
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        style={{
-          background: nodeType.color,
-          border: `2px solid ${C.surface}`,
-          width: 10,
-          height: 10,
-        }}
-      />
+      <Handle type="target" position={Position.Left}
+        style={{ background: nodeType.color, border: `2px solid ${C.surface}`, width: 10, height: 10 }} />
+      <Handle type="source" position={Position.Right}
+        style={{ background: nodeType.color, border: `2px solid ${C.surface}`, width: 10, height: 10 }} />
+      <Handle type="target" position={Position.Top}
+        style={{ background: nodeType.color, border: `2px solid ${C.surface}`, width: 10, height: 10 }} />
+      <Handle type="source" position={Position.Bottom}
+        style={{ background: nodeType.color, border: `2px solid ${C.surface}`, width: 10, height: 10 }} />
 
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
-        <div style={{ color: nodeType.color, fontSize: 10, fontWeight: 600 }}>
+        <div className="flex items-center gap-1.5" style={{ color: nodeType.color, fontSize: 10, fontWeight: 600 }}>
+          <HarveyBall
+            status={data.implementationStatus || 'NOT_STARTED'}
+            size={14}
+            onClick={onCycleImplStatus ? (e) => { e.stopPropagation(); onCycleImplStatus(data.id); } : undefined}
+          />
           {nodeType.icon} {nodeType.label.toUpperCase()}
         </div>
         <div className="flex items-center gap-1">
-          {/* Drill down button for SCREEN nodes */}
-          {data.type === 'SCREEN' && onDrillDown && (
+          {onDrillDown && (
             <button
-              onClick={handleDrillDown}
+              onClick={(e) => { e.stopPropagation(); onDrillDown(data.id); }}
               className="p-1 rounded hover:scale-110 transition-transform"
               style={{
-                background: C.accent,
-                color: 'white',
-                border: 'none',
-                fontSize: 8,
-                width: 16,
-                height: 16,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
+                background: C.accent, color: 'white', border: 'none',
+                fontSize: 8, width: 16, height: 16,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
               }}
-              title="Drill down into screen details"
+              title="Drill down into details"
             >
               ↘
             </button>
           )}
-          <div style={{ fontSize: 10, fontWeight: 600 }}>
+          <button
+            onClick={(e) => { e.stopPropagation(); onOpenSpec?.(data.id); }}
+            style={{
+              fontSize: 9, fontWeight: 600,
+              background: C.accentDim, color: C.accent,
+              border: `1px solid ${C.accent}40`, borderRadius: 3,
+              padding: '1px 5px', cursor: 'pointer',
+            }}
+            title="Open Specification Editor"
+          >
             SPEC
-          </div>
+          </button>
         </div>
       </div>
 
-      {/* Title */}
-      <div style={{ fontWeight: 600, color: C.text, marginBottom: 4 }}>
-        {data.label}
-      </div>
-
-      {/* Description */}
-      {data.description && (
-        <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 8 }}>
-          {data.description}
+      {/* Title (double-click to edit) */}
+      {editingNodeId === data.id ? (
+        <input
+          autoFocus
+          defaultValue={data.label}
+          onBlur={e => onFinishEdit?.(data.id, e.target.value.trim() || data.label)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') onFinishEdit?.(data.id, (e.target as HTMLInputElement).value.trim() || data.label);
+            if (e.key === 'Escape') onFinishEdit?.(data.id, data.label);
+          }}
+          onClick={e => e.stopPropagation()}
+          style={{
+            fontWeight: 600, color: C.text, marginBottom: 4, width: '100%',
+            background: C.surfaceAlt, border: `1px solid ${C.accent}`, borderRadius: 3,
+            padding: '1px 4px', fontSize: 12, outline: 'none',
+          }}
+        />
+      ) : (
+        <div
+          style={{ fontWeight: 600, color: C.text, marginBottom: 4, cursor: 'text' }}
+          onDoubleClick={e => { e.stopPropagation(); onStartEdit?.(data.id, data.label); }}
+          title="Double-click to rename"
+        >
+          {data.label}
         </div>
       )}
 
-      {/* Readiness indicators */}
+      {/* Description */}
+      {data.description && (
+        <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 8 }}>{data.description}</div>
+      )}
+
+      {/* Readiness indicators — 6 bars */}
       <div className="flex gap-1 mb-2">
-        {Object.entries(data.readiness).map(([key, value]) => (
+        {Object.entries(readiness).map(([key, value]) => (
           <div
             key={key}
             style={{
               width: 20,
               height: 8,
               backgroundColor: value >= 0.8 ? C.green : value >= 0.4 ? C.yellow : C.red,
-              opacity: value,
+              opacity: Math.max(value, 0.15), // minimum opacity so empty bars are visible
               borderRadius: 2,
             }}
             title={`${key}: ${Math.round(value * 100)}%`}
@@ -236,13 +408,9 @@ function ForgeNode({ data, onDrillDown }: { data: ForgeNodeData; onDrillDown?: (
       {/* Status badge */}
       <div
         style={{
-          background: status.bg,
-          color: status.color,
-          padding: '2px 6px',
-          borderRadius: 4,
-          fontSize: 10,
-          fontWeight: 600,
-          textAlign: 'center',
+          background: status.bg, color: status.color,
+          padding: '2px 6px', borderRadius: 4, fontSize: 10,
+          fontWeight: 600, textAlign: 'center',
           border: `1px solid ${status.color}20`,
         }}
       >
@@ -252,143 +420,293 @@ function ForgeNode({ data, onDrillDown }: { data: ForgeNodeData; onDrillDown?: (
   );
 }
 
-// Node types for ReactFlow - moved inside component to access handleDrillDown
+// ── Node types factory ─────────────────────────────────────────────────────────
+const createNodeTypes = (
+  onDrillDown: (nodeId: string) => void,
+  onOpenSpec: (nodeId: string) => void,
+  editingNodeId: string | null,
+  onStartEdit: (nodeId: string, currentLabel: string) => void,
+  onFinishEdit: (nodeId: string, newLabel: string) => void,
+  onCycleImplStatus: (nodeId: string) => void,
+) => ({
+  forgeNode: (props: any) => (
+    <ForgeNode {...props} onDrillDown={onDrillDown} onOpenSpec={onOpenSpec}
+      editingNodeId={editingNodeId} onStartEdit={onStartEdit} onFinishEdit={onFinishEdit}
+      onCycleImplStatus={onCycleImplStatus} />
+  ),
+});
 
-// API functions
-async function saveNodePosition(nodeId: string, x: number, y: number) {
-  try {
-    const response = await fetch(`http://localhost:3001/api/v1/work-items/${nodeId}/position`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ x, y }),
-    });
-    return response.ok;
-  } catch (error) {
-    console.error('Failed to save node position:', error);
-    return false;
-  }
-}
-
-async function createDependency(from: string, to: string, type = 'requires') {
-  try {
-    const response = await fetch('http://localhost:3001/api/v1/dependencies', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to, type }),
-    });
-    if (response.ok) {
-      return await response.json();
-    }
-    return null;
-  } catch (error) {
-    console.error('Failed to create dependency:', error);
-    return null;
-  }
-}
-
-async function deleteDependency(from: string, to: string) {
-  try {
-    const response = await fetch(`http://localhost:3001/api/v1/dependencies/${from}/${to}`, {
-      method: 'DELETE',
-    });
-    return response.ok;
-  } catch (error) {
-    console.error('Failed to delete dependency:', error);
-    return false;
-  }
-}
-
-// Main ReactFlow component
-function ForgeGraphFlow() {
+// ── Main graph component ───────────────────────────────────────────────────────
+function ForgeGraphFlow({ projectId }: { projectId?: string }) {
+  const routeParams = useParams();
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedNode, setSelectedNode] = useState<ForgeNodeData | null>(null);
+  const [showSpecEditor, setShowSpecEditor] = useState<string | null>(null);
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
-  const [currentProject, setCurrentProject] = useState<{id: string; name: string; templateId?: string} | null>(null);
-  const [projects, setProjects] = useState<Array<{id: string; name: string; templateId?: string; nodes?: Node[]; edges?: Edge[]}>>([]);
+  const [currentProject, setCurrentProject] = useState<LocalProject | null>(null);
+  const [projects, setProjects] = useState<LocalProject[]>([]);
   const [showProjectNav, setShowProjectNav] = useState(false);
+  // Incrementing counter to force node re-renders when specs change
+  const [specVersion, setSpecVersion] = useState(0);
+  const [showAddNode, setShowAddNode] = useState(false);
+  const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+  const [editingLabel, setEditingLabel] = useState('');
 
-  const { fitView } = useReactFlow();
+  // ── Refs for stable callbacks (prevent nodeTypes recreation) ─────────────
+  const nodesRef = useRef<Node[]>([]);
+  const edgesRef = useRef<Edge[]>([]);
+  const currentProjectRef = useRef<LocalProject | null>(null);
+
+  // Keep refs in sync with state
+  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+  useEffect(() => { edgesRef.current = edges; }, [edges]);
+  useEffect(() => { currentProjectRef.current = currentProject; }, [currentProject]);
+
+  const reactFlowInstance = useReactFlow();
+  const { fitView } = reactFlowInstance;
   const { navigateToDetail } = useNavigationStore();
+  const { setProjectContext, clearProjectContext, markDirty, markClean, setSaving, registerSave } = useCanvasStore();
 
-  // Load data from backend
+  // ── Canvas store: project context + save ─────────────────────────────────
+  useEffect(() => {
+    if (currentProject && currentProject.name) {
+      setProjectContext(currentProject.id, currentProject.name);
+    }
+  }, [currentProject, setProjectContext]);
+
+  // Clean up canvas store on unmount
+  useEffect(() => {
+    return () => clearProjectContext();
+  }, [clearProjectContext]);
+
+  // Register save callback
+  useEffect(() => {
+    const saveToBackend = async () => {
+      // Map numeric Harvey ball values (0-4) to backend readiness enum
+      const toReadiness = (v: number | string): ReadinessState => {
+        if (typeof v === 'string') return v as ReadinessState;
+        if (v === 0) return 'NOT_STARTED';
+        if (v >= 4) return 'COMPLETE';
+        return 'IN_PROGRESS';
+      };
+
+      setSaving(true);
+      try {
+        const allNodes = nodesRef.current;
+        const allEdges = edgesRef.current;
+
+        // Upsert all work items
+        const workItems: WorkItemDTO[] = allNodes.map(n => ({
+          id: n.id,
+          title: n.data.label || '',
+          description: n.data.description || '',
+          type: n.data.type || 'FEATURE',
+          x: n.position.x,
+          y: n.position.y,
+          readiness: {
+            requirements: toReadiness(n.data.readiness?.Requirements ?? 0),
+            design: toReadiness(n.data.readiness?.Design ?? 0),
+            frontend: toReadiness(n.data.readiness?.Frontend ?? 0),
+            backend: toReadiness(n.data.readiness?.Backend ?? 0),
+            integration: toReadiness(n.data.readiness?.Integration ?? 0),
+            test: toReadiness(n.data.readiness?.Test ?? 0),
+          },
+          confidence: n.data.confidence || 'DEFERRED',
+          implementationStatus: n.data.implementationStatus || 'NOT_STARTED',
+        }));
+
+        await WorkItemService.upsertMany(workItems);
+
+        // Upsert all edges as dependencies
+        const deps = allEdges.map(e => ({
+          from: e.source,
+          to: e.target,
+          type: 'requires',
+        }));
+        if (deps.length > 0) {
+          await DependencyService.upsertMany(deps);
+        }
+
+        // Also save to localStorage
+        const proj = currentProjectRef.current;
+        if (proj) {
+          updateLocalGraph(proj.id, allNodes, allEdges);
+        }
+
+        markClean();
+      } catch (err) {
+        console.warn('[ForgeGraph] Save failed:', err);
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    registerSave(saveToBackend);
+  }, [registerSave, setSaving, markClean]);
+
+  // ── Load data ──────────────────────────────────────────────────────────────
   useEffect(() => {
     const loadData = async () => {
+      // Load all localStorage projects
+      const savedProjects = loadLocalProjects();
+      setProjects(savedProjects);
+
+      // If we have a projectId, find the matching localStorage project
+      if (projectId) {
+        const match = savedProjects.find(p => p.id === projectId);
+        if (match && match.nodes?.length) {
+          setCurrentProject(match);
+          setNodes(match.nodes);
+          setEdges(match.edges ?? []);
+          setLoading(false);
+          setTimeout(() => fitView(), 100);
+          return;
+        }
+        // No localStorage data — try loading from backend work items
+        // Fetch project name from backend
+        const projResult = await import('../services/ProjectService').then(m => m.getById(projectId));
+        const projName = projResult?.name || '';
+        setCurrentProject({ id: projectId, name: projName });
+        try {
+          const [workItems, deps] = await Promise.all([
+            WorkItemService.list(),
+            DependencyService.list(),
+          ]);
+          if (workItems.length > 0) {
+            const reactFlowNodes: Node[] = workItems.map((item) => ({
+              id: item.id,
+              type: 'forgeNode',
+              position: { x: item.x ?? Math.random() * 600, y: item.y ?? Math.random() * 400 },
+              data: {
+                id: item.id,
+                type: item.type || 'FEATURE',
+                label: item.title,
+                description: item.description,
+                readiness: {
+                  Requirements: item.readiness?.requirements || 0,
+                  Design: item.readiness?.design || 0,
+                  Frontend: item.readiness?.frontend || 0,
+                  Backend: item.readiness?.backend || 0,
+                  Integration: item.readiness?.integration || 0,
+                  Test: item.readiness?.test || 0,
+                },
+                confidence: item.confidence || 'medium',
+                implementationStatus: item.implementationStatus || 'NOT_STARTED',
+              },
+              draggable: true,
+            }));
+            const reactFlowEdges: Edge[] = deps.map((dep, i) => {
+              const color = dep.type === 'requires' ? C.red : dep.type === 'contains' ? C.textDim : C.blue;
+              const dash = dep.type === 'contains' ? '4,4' : dep.type === 'requires' ? '6,3' : undefined;
+              return {
+                id: `edge-${i}`,
+                source: dep.from,
+                target: dep.to,
+                type: 'smoothstep',
+                style: { stroke: color, strokeWidth: 1.5, strokeDasharray: dash },
+                markerEnd: { type: MarkerType.Arrow, color },
+              };
+            });
+            setNodes(reactFlowNodes);
+            setEdges(reactFlowEdges);
+            setLoading(false);
+            setTimeout(() => fitView(), 100);
+            return;
+          }
+        } catch (err) {
+          console.warn('[ForgeGraph] Failed to load work items for project:', err);
+        }
+        // No data at all — show empty canvas (not template selector, since projects are created via browser)
+        setLoading(false);
+        return;
+      }
+
+      // Legacy path: no projectId — try first localStorage project or load from backend
+      if (savedProjects.length > 0) {
+        const first = savedProjects[0];
+        setCurrentProject(first);
+        if (first.nodes?.length) {
+          setNodes(first.nodes);
+          setEdges(first.edges ?? []);
+          setLoading(false);
+          setTimeout(() => fitView(), 100);
+          return;
+        }
+      }
+
+      // Fall back to backend API
       try {
-        // Load work items
-        const workItemsResponse = await fetch('http://localhost:3001/api/v1/work-items');
-        const workItemsData = await workItemsResponse.json();
+        const [workItems, deps] = await Promise.all([
+          WorkItemService.list(),
+          DependencyService.list(),
+        ]);
 
-        // Load dependencies
-        const dependenciesResponse = await fetch('http://localhost:3001/api/v1/dependencies');
-        const dependenciesData = await dependenciesResponse.json();
-
-        // Transform work items to ReactFlow nodes
-        const reactFlowNodes: Node[] = workItemsData.data.map((item: any) => ({
+        const reactFlowNodes: Node[] = workItems.map((item) => ({
           id: item.id,
           type: 'forgeNode',
-          position: { x: item.x, y: item.y },
+          position: { x: item.x ?? Math.random() * 600, y: item.y ?? Math.random() * 400 },
           data: {
             id: item.id,
-            type: item.type,
+            type: item.type || 'FEATURE',
             label: item.title,
             description: item.description,
-            readiness: item.readiness,
-            confidence: item.confidence,
+            readiness: {
+              Requirements: item.readiness?.requirements || 0,
+              Design:       item.readiness?.design       || 0,
+              Frontend:     item.readiness?.frontend      || 0,
+              Backend:      item.readiness?.backend       || 0,
+              Integration:  item.readiness?.integration   || 0,
+              Test:         item.readiness?.test           || 0,
+            },
+            confidence: item.confidence || 'DEFERRED',
+            implementationStatus: item.implementationStatus || 'NOT_STARTED',
           },
           draggable: true,
         }));
 
-        // Transform dependencies to ReactFlow edges
-        const reactFlowEdges: Edge[] = dependenciesData.data.map((dep: ForgeEdgeData, i: number) => {
+        const reactFlowEdges: Edge[] = deps.map((dep, i) => {
           const color = dep.type === 'requires' ? C.red : dep.type === 'contains' ? C.textDim : C.blue;
-          const style = dep.type === 'contains' ? '4,4' : dep.type === 'requires' ? '6,3' : 'none';
-
+          const dash = dep.type === 'contains' ? '4,4' : dep.type === 'requires' ? '6,3' : undefined;
           return {
             id: `edge-${i}`,
             source: dep.from,
             target: dep.to,
             type: 'smoothstep',
-            style: {
-              stroke: color,
-              strokeWidth: 1.5,
-              strokeDasharray: style !== 'none' ? style : undefined,
-            },
-            markerEnd: {
-              type: 'arrow',
-              color: color,
-            },
+            style: { stroke: color, strokeWidth: 1.5, strokeDasharray: dash },
+            markerEnd: { type: MarkerType.Arrow, color },
           };
         });
 
-        setNodes(reactFlowNodes);
-        setEdges(reactFlowEdges);
+        if (reactFlowNodes.length > 0) {
+          setNodes(reactFlowNodes);
+          setEdges(reactFlowEdges);
+        }
         setLoading(false);
-
-        // Fit view after data loads
         setTimeout(() => fitView(), 100);
       } catch (error) {
-        console.error('Failed to load data:', error);
+        console.error('Failed to load data from backend:', error);
         setLoading(false);
+        setShowTemplateSelector(true);
       }
     };
 
     loadData();
-  }, [fitView]);
+  }, [fitView, projectId]);
 
-  // Load template when selected
+  // ── Load template ──────────────────────────────────────────────────────────
   const loadTemplate = useCallback((templateId: string, customName?: string) => {
     const template = WORKFLOW_TEMPLATES.find(t => t.id === templateId);
     if (!template) return;
 
-    // Store project with custom name
     const projectName = customName || template.name;
-    const projectId = `project-${Date.now()}`;
-    const newProject = { id: projectId, name: projectName, templateId };
+    // Use the current projectId (from the URL) if available, otherwise generate one
+    const localProjectId = currentProject?.id || projectId || `project-${Date.now()}`;
+    const newProject: LocalProject = { id: localProjectId, name: projectName, templateId };
+
     setCurrentProject(newProject);
 
-    // Transform template nodes to FORGE format
     const forgeNodes: Node[] = template.nodes.map((node) => ({
       id: node.id,
       type: 'forgeNode',
@@ -400,187 +718,294 @@ function ForgeGraphFlow() {
         description: node.data.description,
         readiness: {
           Requirements: node.data.readiness?.requirements || 0,
-          Design: node.data.readiness?.design || 0,
-          Frontend: node.data.readiness?.frontend || 0,
-          Backend: node.data.readiness?.backend || 0,
-          Integration: node.data.readiness?.integration || 0,
-          Test: node.data.readiness?.test || 0,
+          Design:       node.data.readiness?.design       || 0,
+          Frontend:     node.data.readiness?.frontend      || 0,
+          Backend:      node.data.readiness?.backend       || 0,
+          Integration:  node.data.readiness?.integration   || 0,
+          Test:         node.data.readiness?.test           || 0,
         },
         confidence: 'medium',
+        implementationStatus: 'NOT_STARTED' as ImplStatusKey,
       },
       draggable: true,
     }));
 
-    // Transform template edges to FORGE format
     const forgeEdges: Edge[] = template.edges.map((edge, i) => ({
       id: edge.id || `edge-${i}`,
       source: edge.source,
       target: edge.target,
       type: 'smoothstep',
-      style: {
-        stroke: C.blue,
-        strokeWidth: 1.5,
-      },
-      markerEnd: {
-        type: 'arrow',
-        color: C.blue,
-      },
+      style: { stroke: C.blue, strokeWidth: 1.5 },
+      markerEnd: { type: MarkerType.Arrow, color: C.blue },
     }));
+
+    // Persist project to localStorage
+    const projectWithData: LocalProject = { ...newProject, nodes: forgeNodes, edges: forgeEdges };
+    const updated = addLocalProject(projectWithData);
+    setProjects(updated);
 
     setNodes(forgeNodes);
     setEdges(forgeEdges);
-
-    // Save project to projects list
-    const projectWithData = {
-      ...newProject,
-      nodes: forgeNodes,
-      edges: forgeEdges
-    };
-    setProjects(prev => {
-      const updated = [...prev, projectWithData];
-      // Save to localStorage
-      localStorage.setItem('forgeProjects', JSON.stringify(updated));
-      return updated;
-    });
-
     setShowTemplateSelector(false);
     setLoading(false);
 
-    // Fit view after template loads
+    // Persist work items to DB so spec API calls work
+    const workItems: WorkItemDTO[] = forgeNodes.map(n => ({
+      id: n.id,
+      title: n.data.label,
+      description: n.data.description || '',
+      type: n.data.type || 'task',
+      x: n.position.x,
+      y: n.position.y,
+      readiness: {
+        requirements: 'NOT_STARTED', design: 'NOT_STARTED', frontend: 'NOT_STARTED',
+        backend: 'NOT_STARTED', integration: 'NOT_STARTED', test: 'NOT_STARTED',
+      },
+      confidence: n.data.confidence || 'low',
+      implementationStatus: 'NOT_STARTED',
+    }));
+
+    WorkItemService.upsertMany(workItems).then(({ created }) => {
+      if (created > 0) console.log(`[ForgeGraph] ${created} work items saved to DB`);
+    }).catch(err => {
+      console.warn('[ForgeGraph] Failed to save work items to DB:', err);
+    });
+
     setTimeout(() => fitView(), 100);
   }, [fitView]);
 
-  // Handle node changes (position updates)
-  const onNodesChange = useCallback(
-    (changes: NodeChange[]) => {
-      setNodes((nds) => applyNodeChanges(changes, nds));
+  // ── Add new node to canvas ──────────────────────────────────────────────────
+  const handleAddNode = useCallback((label: string, nodeType: keyof typeof NTYPES, description?: string) => {
+    const id = `node-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    // Place at viewport center
+    const vp = reactFlowInstance?.getViewport();
+    const x = vp ? (-vp.x + 400) / vp.zoom : 300;
+    const y = vp ? (-vp.y + 300) / vp.zoom : 200;
 
-      // Save position changes to backend
-      changes.forEach((change) => {
-        if (change.type === 'position' && change.position && change.dragging === false) {
-          saveNodePosition(change.id, change.position.x, change.position.y);
-        }
-      });
-    },
-    []
-  );
+    const newNode: Node = {
+      id,
+      type: 'forgeNode',
+      position: { x, y },
+      data: {
+        id,
+        type: nodeType,
+        label,
+        description: description || '',
+        readiness: { Requirements: 0, Design: 0, Frontend: 0, Backend: 0, Integration: 0, Test: 0 },
+        confidence: 'DEFERRED',
+        implementationStatus: 'NOT_STARTED' as ImplStatusKey,
+      },
+      draggable: true,
+    };
 
-  // Handle edge changes
-  const onEdgesChange = useCallback(
-    (changes: EdgeChange[]) => setEdges((eds) => applyEdgeChanges(changes, eds)),
-    []
-  );
+    setNodes(prev => [...prev, newNode]);
+    setShowAddNode(false);
+    markDirty();
 
-  // Handle new connections
-  const onConnect = useCallback(
-    async (connection: Connection) => {
-      if (connection.source && connection.target) {
-        const newDep = await createDependency(connection.source, connection.target);
-        if (newDep) {
-          const newEdge = {
-            id: `edge-${Date.now()}`,
-            source: connection.source,
-            target: connection.target,
-            type: 'smoothstep',
-            style: {
-              stroke: C.red,
-              strokeWidth: 1.5,
-              strokeDasharray: '6,3',
-            },
-            markerEnd: {
-              type: 'arrow',
-              color: C.red,
-            },
-          };
-          setEdges((eds) => addEdge(newEdge, eds));
-        }
+    // Persist to localStorage (read from refs for stable callback)
+    const proj = currentProjectRef.current;
+    if (proj) {
+      const updatedNodes = [...nodesRef.current, newNode];
+      updateLocalGraph(proj.id, updatedNodes, edgesRef.current);
+    }
+
+    // Persist to backend (fire-and-forget)
+    const dto: WorkItemDTO = {
+      id, title: label, description: description || '', type: nodeType,
+      x, y,
+      readiness: {
+        requirements: 'NOT_STARTED', design: 'NOT_STARTED', frontend: 'NOT_STARTED',
+        backend: 'NOT_STARTED', integration: 'NOT_STARTED', test: 'NOT_STARTED',
+      },
+      confidence: 'low',
+      implementationStatus: 'NOT_STARTED',
+    };
+    WorkItemService.create(dto).catch(err => console.warn('[ForgeGraph] Failed to save new node:', err));
+  }, [reactFlowInstance]);
+
+  // ── Rename node ────────────────────────────────────────────────────────────
+  const handleRenameNode = useCallback((nodeId: string, newLabel: string) => {
+    setNodes(prev => prev.map(n =>
+      n.id === nodeId ? { ...n, data: { ...n.data, label: newLabel } } : n
+    ));
+    markDirty();
+    setEditingNodeId(null);
+
+    // Persist to localStorage (read from refs for stable callback)
+    const proj = currentProjectRef.current;
+    if (proj) {
+      const updatedNodes = nodesRef.current.map(n =>
+        n.id === nodeId ? { ...n, data: { ...n.data, label: newLabel } } : n
+      );
+      updateLocalGraph(proj.id, updatedNodes, edgesRef.current);
+    }
+
+    // Persist to backend (fire-and-forget)
+    WorkItemService.update(nodeId, { title: newLabel }).catch(err =>
+      console.warn('[ForgeGraph] Failed to rename node:', err)
+    );
+  }, []);
+
+  // ── Node changes (position) ────────────────────────────────────────────────
+  const onNodesChange = useCallback((changes: NodeChange[]) => {
+    setNodes(nds => applyNodeChanges(changes, nds));
+
+    for (const change of changes) {
+      if (change.type === 'position' && change.position && change.dragging === false) {
+        WorkItemService.updatePosition(change.id, change.position.x, change.position.y);
+        markDirty();
       }
+    }
+  }, [markDirty]);
+
+  // ── Edge changes ───────────────────────────────────────────────────────────
+  const onEdgesChange = useCallback(
+    (changes: EdgeChange[]) => {
+      setEdges(eds => applyEdgeChanges(changes, eds));
+      if (changes.some(c => c.type === 'remove' || c.type === 'add')) markDirty();
     },
-    []
+    [markDirty],
   );
 
-  // Handle node selection (single click)
-  const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
+  // ── New connections ────────────────────────────────────────────────────────
+  const onConnect = useCallback(async (connection: Connection) => {
+    if (!connection.source || !connection.target) return;
+    const dep = await DependencyService.create(connection.source, connection.target);
+    if (dep) {
+      const newEdge = {
+        id: `edge-${Date.now()}`,
+        source: connection.source,
+        target: connection.target,
+        type: 'smoothstep',
+        style: { stroke: C.red, strokeWidth: 1.5, strokeDasharray: '6,3' },
+        markerEnd: { type: MarkerType.Arrow, color: C.red },
+      };
+      setEdges(eds => addEdge(newEdge, eds));
+      markDirty();
+    }
+  }, [markDirty]);
+
+  // ── Node click ─────────────────────────────────────────────────────────────
+  const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     setSelectedNode(node.data);
   }, []);
 
-  // Handle drill-down navigation
+  // ── Drill-down ─────────────────────────────────────────────────────────────
   const handleDrillDown = useCallback((nodeId: string) => {
-    // Navigate to detailed view for screens
-    window.location.href = `/workflow/${nodeId}`;
-  }, []);
+    const slug = routeParams?.slug as string | undefined;
+    const pid = projectId || (routeParams?.projectId as string | undefined);
+    if (slug && pid) {
+      window.location.href = `/t/${slug}/projects/${pid}/detail/${nodeId}`;
+    } else {
+      // Fallback for non-tenant routes
+      window.location.href = `/workflow/${nodeId}`;
+    }
+  }, [routeParams, projectId]);
 
-  // Handle edge deletion
+  // ── Edge click (Cmd+Click to delete) ──────────────────────────────────────
   const onEdgeClick = useCallback(async (event: React.MouseEvent, edge: Edge) => {
     if (event.ctrlKey || event.metaKey) {
-      const success = await deleteDependency(edge.source, edge.target);
-      if (success) {
-        setEdges((eds) => eds.filter((e) => e.id !== edge.id));
-      }
+      const ok = await DependencyService.remove(edge.source, edge.target);
+      if (ok) setEdges(eds => eds.filter(e => e.id !== edge.id));
     }
   }, []);
 
-  // Node types with drill-down handler - memoized to prevent recreating on every render
+  // ── Open / close spec editor ──────────────────────────────────────────────
+  const handleOpenSpec = useCallback((nodeId: string) => {
+    setShowSpecEditor(nodeId);
+  }, []);
+
+  const handleCloseSpec = useCallback(() => {
+    setShowSpecEditor(null);
+    // Bump version to force ForgeNode re-renders with fresh readiness data
+    setSpecVersion(v => v + 1);
+  }, []);
+
+  // ── Node types (memoised) ─────────────────────────────────────────────────
+  const handleStartEdit = useCallback((nodeId: string, _currentLabel: string) => {
+    setEditingNodeId(nodeId);
+  }, []);
+
+  const handleFinishEdit = useCallback((nodeId: string, newLabel: string) => {
+    handleRenameNode(nodeId, newLabel);
+  }, [handleRenameNode]);
+
+  // ── Cycle implementation status (Harvey ball click) ─────────────────────
+  const handleCycleImplStatus = useCallback((nodeId: string) => {
+    // Use functional updater so we don't depend on `nodes` state directly
+    setNodes(prev => {
+      const updated = prev.map(n => {
+        if (n.id !== nodeId) return n;
+        const currentStatus: ImplStatusKey = n.data.implementationStatus || 'NOT_STARTED';
+        const idx = IMPL_STATUS_ORDER.indexOf(currentStatus);
+        const nextStatus = IMPL_STATUS_ORDER[(idx + 1) % IMPL_STATUS_ORDER.length];
+        return { ...n, data: { ...n.data, implementationStatus: nextStatus } };
+      });
+
+      // Persist to localStorage inside the updater (we have the fresh nodes)
+      const proj = currentProjectRef.current;
+      if (proj) {
+        updateLocalGraph(proj.id, updated, edgesRef.current);
+      }
+
+      return updated;
+    });
+
+    // Persist to backend — read from ref for the current status
+    const node = nodesRef.current.find(n => n.id === nodeId);
+    if (node) {
+      const currentStatus: ImplStatusKey = node.data.implementationStatus || 'NOT_STARTED';
+      const idx = IMPL_STATUS_ORDER.indexOf(currentStatus);
+      const nextStatus = IMPL_STATUS_ORDER[(idx + 1) % IMPL_STATUS_ORDER.length];
+
+      WorkItemService.update(nodeId, { implementationStatus: nextStatus } as any).catch(err =>
+        console.warn('[ForgeGraph] Failed to update implementation status:', err)
+      );
+    }
+  }, []);
+
   const nodeTypes = React.useMemo(
-    () => createNodeTypes(handleDrillDown),
-    [handleDrillDown]
+    () => createNodeTypes(handleDrillDown, handleOpenSpec, editingNodeId, handleStartEdit, handleFinishEdit, handleCycleImplStatus),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [handleDrillDown, handleOpenSpec, specVersion, editingNodeId, handleStartEdit, handleFinishEdit, handleCycleImplStatus],
   );
 
-  // Load projects from localStorage on mount
+  // ── Auto-save project to localStorage ─────────────────────────────────────
   useEffect(() => {
-    const savedProjects = localStorage.getItem('forgeProjects');
-    if (savedProjects) {
-      try {
-        const parsed = JSON.parse(savedProjects);
-        setProjects(parsed);
-        // Load the first project by default
-        if (parsed.length > 0 && !currentProject) {
-          const firstProject = parsed[0];
-          setCurrentProject(firstProject);
-          if (firstProject.nodes && firstProject.edges) {
-            setNodes(firstProject.nodes);
-            setEdges(firstProject.edges);
-          }
-        }
-      } catch (e) {
-        console.error('Failed to load saved projects:', e);
-      }
+    if (currentProject && nodes.length > 0) {
+      const updated = updateLocalGraph(currentProject.id, nodes, edges);
+      setProjects(updated);
     }
-  }, []);
+  }, [nodes, edges, currentProject]);
 
-  // Handle project selection
+  // ── Project navigation ────────────────────────────────────────────────────
   const handleSelectProject = useCallback((project: any) => {
     setCurrentProject(project);
-    if (project.nodes && project.edges) {
+    if (project.nodes?.length) {
       setNodes(project.nodes);
-      setEdges(project.edges);
+      setEdges(project.edges ?? []);
       setLoading(false);
       setTimeout(() => fitView(), 100);
     }
     setShowProjectNav(false);
   }, [fitView]);
 
-  // Handle project deletion
   const handleDeleteProject = useCallback((projectId: string) => {
-    setProjects(prev => {
-      const updated = prev.filter(p => p.id !== projectId);
-      localStorage.setItem('forgeProjects', JSON.stringify(updated));
+    const updated = removeLocalProject(projectId);
+    setProjects(updated);
 
-      // If deleting current project, switch to another or clear
-      if (currentProject?.id === projectId) {
-        if (updated.length > 0) {
-          handleSelectProject(updated[0]);
-        } else {
-          setCurrentProject(null);
-          setNodes([]);
-          setEdges([]);
-        }
+    if (currentProjectRef.current?.id === projectId) {
+      if (updated.length > 0) {
+        handleSelectProject(updated[0]);
+      } else {
+        setCurrentProject(null);
+        setNodes([]);
+        setEdges([]);
       }
+    }
+  }, [handleSelectProject]);
 
-      return updated;
-    });
-  }, [currentProject, handleSelectProject]);
-
+  // ── Render ────────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="w-full h-full flex items-center justify-center" style={{ background: C.bg, color: C.text }}>
@@ -601,13 +1026,16 @@ function ForgeGraphFlow() {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeClick={onNodeClick}
+        onNodeDoubleClick={(_event, node) => {
+          handleStartEdit(node.id, node.data?.label || '');
+        }}
         onEdgeClick={onEdgeClick}
         nodeTypes={nodeTypes}
         fitView
         style={{ background: C.bg }}
       >
         <Background color={C.border} />
-        <Controls style={{ button: { background: C.surface, border: `1px solid ${C.border}`, color: C.text } }} />
+        <Controls style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.text }} />
         <MiniMap
           style={{ background: C.surface, border: `1px solid ${C.border}` }}
           nodeColor={C.accent}
@@ -617,90 +1045,125 @@ function ForgeGraphFlow() {
         />
       </ReactFlow>
 
-      {/* Legend & Controls */}
-      <div className="absolute top-4 left-4 p-4 rounded-lg" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
-        <h2 className="text-sm font-bold mb-2" style={{ color: C.text }}>
-          {currentProject ? currentProject.name : 'FORGE Workflow'}
-        </h2>
-
-        {/* Projects Button */}
+      {/* Canvas Toolbar */}
+      <div className="absolute top-4 left-4 flex flex-col gap-2" style={{ zIndex: 10 }}>
         <button
-          onClick={() => setShowProjectNav(!showProjectNav)}
-          className="w-full mb-2 px-3 py-2 rounded text-xs font-medium transition-all hover:scale-[1.02]"
+          onClick={() => setShowAddNode(!showAddNode)}
+          className="px-3 py-2 rounded-lg text-xs font-medium transition-all hover:scale-[1.02] shadow-lg"
           style={{
-            background: showProjectNav ? C.accent : C.surfaceAlt,
-            color: showProjectNav ? 'white' : C.text,
-            border: `1px solid ${showProjectNav ? C.accent : C.border}`,
+            background: showAddNode ? C.accent : C.surface,
+            color: showAddNode ? 'white' : C.green,
+            border: `1px solid ${showAddNode ? C.accent : C.border}`,
           }}
         >
-          📁 Projects ({projects.length})
+          + Add Node
         </button>
 
-        {/* Template Button */}
-        <button
-          onClick={() => setShowTemplateSelector(true)}
-          className="w-full mb-3 px-3 py-2 rounded text-xs font-medium transition-all hover:scale-[1.02]"
-          style={{
-            background: C.accent,
-            color: 'white',
-            border: 'none',
-          }}
-        >
-          🚀 New from Template
-        </button>
-
-        <div className="space-y-1 text-xs" style={{ color: C.textMuted }}>
-          <div>• Drag nodes to move</div>
-          <div>• Drag from handles to connect</div>
-          <div>• Cmd+Click edge to delete</div>
-        </div>
+        {/* Legacy project nav (when no projectId) */}
+        {!projectId && (
+          <>
+            <button
+              onClick={() => setShowProjectNav(!showProjectNav)}
+              className="px-3 py-2 rounded-lg text-xs font-medium transition-all hover:scale-[1.02] shadow-lg"
+              style={{
+                background: showProjectNav ? C.accent : C.surface,
+                color: showProjectNav ? 'white' : C.text,
+                border: `1px solid ${showProjectNav ? C.accent : C.border}`,
+              }}
+            >
+              Projects ({projects.length})
+            </button>
+            <button
+              onClick={() => setShowTemplateSelector(true)}
+              className="px-3 py-2 rounded-lg text-xs font-medium transition-all hover:scale-[1.02] shadow-lg"
+              style={{ background: C.accent, color: 'white', border: 'none' }}
+            >
+              New from Template
+            </button>
+          </>
+        )}
       </div>
+
+      {/* Add Node Panel */}
+      {showAddNode && (
+        <div className="absolute top-4 left-72 p-4 rounded-lg" style={{ background: C.surface, border: `1px solid ${C.border}`, width: 260 }}>
+          <AddNodeForm onAdd={handleAddNode} onCancel={() => setShowAddNode(false)} />
+        </div>
+      )}
 
       {/* Selected Node Details */}
       {selectedNode && (
         <div className="absolute top-4 right-4 w-80 p-4 rounded-lg" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-bold" style={{ color: C.text }}>{selectedNode.label}</h3>
-            <button
-              onClick={() => setSelectedNode(null)}
-              style={{ color: C.textMuted }}
-              className="text-xs hover:opacity-75"
-            >
-              ✕
-            </button>
+            <button onClick={() => setSelectedNode(null)} style={{ color: C.textMuted }} className="text-xs hover:opacity-75">✕</button>
           </div>
 
           {selectedNode.description && (
-            <p className="text-xs mb-4" style={{ color: C.textMuted }}>
-              {selectedNode.description}
-            </p>
+            <p className="text-xs mb-4" style={{ color: C.textMuted }}>{selectedNode.description}</p>
           )}
+
+          {/* Implementation Status (Harvey Ball) */}
+          <div className="flex items-center gap-2 mb-4">
+            <HarveyBall status={selectedNode.implementationStatus || 'NOT_STARTED'} size={18} />
+            <span className="text-xs font-medium" style={{ color: C.text }}>
+              {IMPL_STATUS[selectedNode.implementationStatus || 'NOT_STARTED'].label}
+            </span>
+            <span className="text-xs" style={{ color: C.textMuted }}>
+              ({IMPL_STATUS[selectedNode.implementationStatus || 'NOT_STARTED'].pct}% built)
+            </span>
+          </div>
 
           <div className="space-y-2">
             <h4 className="text-xs font-medium" style={{ color: C.text }}>Readiness Dimensions</h4>
-            {Object.entries(selectedNode.readiness).map(([key, value]) => (
-              <div key={key} className="flex justify-between items-center">
-                <span className="text-xs" style={{ color: C.textMuted }}>{key}</span>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="h-2 rounded-full"
-                    style={{
-                      width: 60,
-                      background: C.surfaceAlt,
-                    }}
-                  >
-                    <div
-                      className="h-full rounded-full"
-                      style={{
+            {(() => {
+              const live = SpecificationService.getReadinessForNode(selectedNode.id);
+              const hasLocal = Object.values(live).some(v => v > 0);
+              const readiness = hasLocal ? live : selectedNode.readiness;
+              return Object.entries(readiness).map(([key, value]) => (
+                <div key={key} className="flex justify-between items-center">
+                  <span className="text-xs" style={{ color: C.textMuted }}>{key}</span>
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 rounded-full" style={{ width: 60, background: C.surfaceAlt }}>
+                      <div className="h-full rounded-full" style={{
                         width: `${value * 100}%`,
                         background: value >= 0.8 ? C.green : value >= 0.4 ? C.yellow : C.red,
-                      }}
-                    />
+                      }} />
+                    </div>
+                    <span className="text-xs" style={{ color: C.text }}>{Math.round(value * 100)}%</span>
                   </div>
-                  <span className="text-xs" style={{ color: C.text }}>{Math.round(value * 100)}%</span>
                 </div>
-              </div>
-            ))}
+              ));
+            })()}
+          </div>
+
+          <button
+            onClick={() => setShowSpecEditor(selectedNode.id)}
+            className="w-full mt-4 px-3 py-2 rounded text-xs font-medium transition-all hover:scale-[1.02]"
+            style={{ background: C.accent, color: 'white', border: 'none' }}
+          >
+            📋 Open Specification Editor
+          </button>
+        </div>
+      )}
+
+      {/* Specification Editor Modal */}
+      {showSpecEditor && (
+        <div
+          className="absolute inset-0 flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.7)', zIndex: 50 }}
+          onClick={handleCloseSpec}
+        >
+          <div
+            className="w-[90%] h-[85%] rounded-lg overflow-auto"
+            style={{ background: C.bg }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <SpecificationEditor
+              workItemId={showSpecEditor}
+              variant="full"
+              onClose={handleCloseSpec}
+            />
           </div>
         </div>
       )}
@@ -726,16 +1189,11 @@ function ForgeGraphFlow() {
   );
 }
 
-// Define nodeTypes outside of component to prevent recreation
-const createNodeTypes = (onDrillDown: (nodeId: string) => void) => ({
-  forgeNode: (props: any) => <ForgeNode {...props} onDrillDown={onDrillDown} />,
-});
-
-// Wrapper component with ReactFlowProvider
-export default function ForgeGraphReactFlow() {
+// Wrapper with ReactFlowProvider
+export default function ForgeGraphReactFlow({ projectId }: { projectId?: string } = {}) {
   return (
     <ReactFlowProvider>
-      <ForgeGraphFlow />
+      <ForgeGraphFlow projectId={projectId} />
     </ReactFlowProvider>
   );
 }

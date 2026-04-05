@@ -150,7 +150,7 @@ const INITIAL_NODES: ForgeNode[] = [
     readiness: { Requirements: 0.8, Design: 0.4, Frontend: 0, Backend: 0.2, Integration: 0, Test: 0 },
     confidence: "DEFERRED",
     release: "1.1",
-    sprint: null,
+    sprint: undefined,
     hasSpec: false,
     description: "Process CC/ACH"
   },
@@ -189,7 +189,7 @@ const INITIAL_NODES: ForgeNode[] = [
     readiness: { Requirements: 0.4, Design: 0.5, Frontend: 0.2, Backend: 0.1, Integration: 0.1, Test: 0 },
     confidence: "DEFERRED",
     release: "1.2",
-    sprint: null,
+    sprint: undefined,
     hasSpec: true,
     description: "DocuSign integration"
   },
@@ -454,8 +454,9 @@ export default function ForgeGraph() {
                       setEdges(prev => prev.filter(e => !(e.from === edge.from && e.to === edge.to)));
                     }
                   }}
-                  title="Ctrl+Click to delete connection"
-                />
+                >
+                  <title>Ctrl+Click to delete connection</title>
+                </line>
               </g>
             );
           })}

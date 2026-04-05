@@ -1,5 +1,5 @@
 import { injectable, inject } from 'inversify';
-import { WorkItem, ReadinessState, ReadinessDimension } from '../domain/entities.js';
+import { WorkItem, ReadinessState, ReadinessDimension, ReadinessDimensionKey } from '../domain/entities.js';
 import type { IWorkItemRepository } from '../adapters/IWorkItemRepository.js';
 import type { IGraphRepository } from '../adapters/IGraphRepository.js';
 import type { AuditTrailService } from './AuditTrailService.js';
@@ -18,22 +18,35 @@ export class WorkItemService {
 
   /**
    * Create a work item - saves to PostgreSQL and syncs to Neo4j as node
+   * @param tenantId - Required tenant context for multi-tenant isolation
    */
   async createWorkItem(
+    tenantId: string,
     id: string,
     title: string,
     spec: Record<string, any> = {},
     description?: string,
-    readiness?: ReadinessState
+    readiness?: ReadinessState,
+    deliverableType?: string,
+    parentId?: string,
+    implementationStatus?: string,
   ): Promise<WorkItem> {
     try {
-      // Create domain entity
+      // Create domain entity with tenant context
       const workItem = new WorkItem(
         id,
         spec,
         title,
         description,
-        readiness || new ReadinessState()
+        readiness || new ReadinessState(),
+        undefined, // groupId
+        undefined, // sprintId
+        parentId,
+        deliverableType as any,
+        undefined, // createdAt
+        undefined, // updatedAt
+        tenantId,
+        implementationStatus as any,
       );
 
       // Validate business rules
@@ -84,7 +97,7 @@ export class WorkItemService {
    */
   async updateReadiness(
     workItemId: string,
-    dimension: keyof ReadinessState,
+    dimension: ReadinessDimensionKey,
     value: ReadinessDimension
   ): Promise<WorkItem> {
     try {

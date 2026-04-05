@@ -254,12 +254,13 @@ export class AnalyticsService {
     try {
       let sprints: Sprint[];
 
+      const allSprints = this.sprintService.getSprints();
       if (sprintIds) {
-        sprints = await Promise.all(
-          sprintIds.map(id => this.sprintService.getSprintById(id))
-        ).then(results => results.filter(Boolean) as Sprint[]);
+        sprints = sprintIds
+          .map(id => allSprints.get(id))
+          .filter(Boolean) as Sprint[];
       } else {
-        sprints = await this.sprintService.getAllSprints();
+        sprints = Array.from(allSprints.values());
       }
 
       const velocityData: VelocityData[] = [];
@@ -298,7 +299,7 @@ export class AnalyticsService {
    */
   async calculateBurndown(sprintId: string, granularity: 'daily' | 'weekly' = 'daily'): Promise<BurndownData> {
     try {
-      const sprint = await this.sprintService.getSprintById(sprintId);
+      const sprint = this.sprintService.getSprints().get(sprintId);
       if (!sprint) {
         throw new Error(`Sprint ${sprintId} not found`);
       }
@@ -637,7 +638,7 @@ export class AnalyticsService {
    */
   async velocityTrend(sprintCount: number = 5): Promise<TrendData> {
     try {
-      const sprints = await this.sprintService.getAllSprints();
+      const sprints = Array.from(this.sprintService.getSprints().values());
       const recentSprints = sprints
         .filter(s => s.status === SprintStatus.COMPLETE)
         .sort((a, b) => b.endDate.getTime() - a.endDate.getTime())
@@ -828,7 +829,8 @@ export class AnalyticsService {
 
   private async getAllWorkItems(): Promise<WorkItem[]> {
     try {
-      return await this.workItemRepository.findAll();
+      const result = await this.workItemRepository.findAll();
+      return result.items;
     } catch (error) {
       console.warn('Could not fetch all work items, returning empty array');
       return [];
@@ -1067,7 +1069,7 @@ export class AnalyticsService {
     });
 
     // Complexity factor
-    const complexity = item.specification?.complexity || 'medium';
+    const complexity = (item.spec as any)?.complexity || 'medium';
     const complexityWeight = { simple: 0.8, medium: 0.6, complex: 0.4 };
     factors.push({
       name: 'Complexity',
@@ -1665,7 +1667,7 @@ export class AnalyticsService {
 
   private estimateItemDuration(item: WorkItem): number {
     // Estimate duration based on complexity and current completion
-    const complexity = item.specification?.complexity || 'medium';
+    const complexity = (item.spec as any)?.complexity || 'medium';
     const baseDuration = { simple: 3, medium: 5, complex: 8 };
     const currentCompletion = item.readiness.getCompletionPercentage();
 

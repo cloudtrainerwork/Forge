@@ -48,7 +48,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Product Listing',
           type: 'SCREEN',
           description: 'Browse products with filters',
-          readiness: { requirements: 90, design: 80, frontend: 0, backend: 0, integration: 0, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
       {
@@ -59,7 +59,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Product Detail',
           type: 'SCREEN',
           description: 'Product info, reviews, add to cart',
-          readiness: { requirements: 85, design: 70, frontend: 0, backend: 0, integration: 0, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
       {
@@ -70,7 +70,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Shopping Cart',
           type: 'SCREEN',
           description: 'View cart items, modify quantities',
-          readiness: { requirements: 80, design: 60, frontend: 0, backend: 0, integration: 0, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
       {
@@ -81,7 +81,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Checkout',
           type: 'SCREEN',
           description: 'Payment & shipping info',
-          readiness: { requirements: 75, design: 50, frontend: 0, backend: 0, integration: 0, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
 
@@ -94,7 +94,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Product Service',
           type: 'SERVICE',
           description: 'Product CRUD operations',
-          readiness: { requirements: 70, design: 60, frontend: 0, backend: 20, integration: 0, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
       {
@@ -105,7 +105,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Cart Service',
           type: 'SERVICE',
           description: 'Session-based cart management',
-          readiness: { requirements: 65, design: 40, frontend: 0, backend: 15, integration: 0, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
       {
@@ -116,7 +116,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Payment Service',
           type: 'SERVICE',
           description: 'Stripe/PayPal integration',
-          readiness: { requirements: 60, design: 30, frontend: 0, backend: 10, integration: 0, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
       {
@@ -127,7 +127,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Order Service',
           type: 'SERVICE',
           description: 'Order processing & fulfillment',
-          readiness: { requirements: 55, design: 25, frontend: 0, backend: 5, integration: 0, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
 
@@ -140,7 +140,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Product Database',
           type: 'DATABASE',
           description: 'Product catalog & inventory',
-          readiness: { requirements: 80, design: 70, frontend: 0, backend: 50, integration: 30, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
       {
@@ -151,7 +151,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'User Database',
           type: 'DATABASE',
           description: 'Customer accounts & profiles',
-          readiness: { requirements: 75, design: 65, frontend: 0, backend: 40, integration: 20, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
       {
@@ -162,7 +162,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Order Database',
           type: 'DATABASE',
           description: 'Transaction & order history',
-          readiness: { requirements: 70, design: 60, frontend: 0, backend: 30, integration: 10, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       }
     ],
@@ -196,7 +196,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Login Screen',
           type: 'SCREEN',
           description: 'Email/password authentication',
-          readiness: { requirements: 95, design: 90, frontend: 60, backend: 40, integration: 20, test: 10 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
       {
@@ -207,7 +207,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Registration',
           type: 'SCREEN',
           description: 'New user signup form',
-          readiness: { requirements: 90, design: 80, frontend: 50, backend: 30, integration: 15, test: 5 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
       {
@@ -218,7 +218,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Forgot Password',
           type: 'SCREEN',
           description: 'Password reset request',
-          readiness: { requirements: 85, design: 70, frontend: 40, backend: 20, integration: 10, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
       {
@@ -229,7 +229,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'User Profile',
           type: 'SCREEN',
           description: 'Edit user information',
-          readiness: { requirements: 80, design: 60, frontend: 30, backend: 15, integration: 5, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
 
@@ -242,7 +242,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Auth Service',
           type: 'SERVICE',
           description: 'JWT token management',
-          readiness: { requirements: 85, design: 70, frontend: 0, backend: 50, integration: 30, test: 15 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
       {
@@ -253,7 +253,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Email Service',
           type: 'SERVICE',
           description: 'Send verification & reset emails',
-          readiness: { requirements: 75, design: 60, frontend: 0, backend: 40, integration: 20, test: 5 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
       {
@@ -264,7 +264,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'User Service',
           type: 'SERVICE',
           description: 'User CRUD operations',
-          readiness: { requirements: 80, design: 65, frontend: 0, backend: 45, integration: 25, test: 10 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
 
@@ -277,7 +277,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'User Database',
           type: 'DATABASE',
           description: 'User accounts & sessions',
-          readiness: { requirements: 90, design: 80, frontend: 0, backend: 70, integration: 50, test: 30 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
 
@@ -290,7 +290,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Email Provider',
           type: 'INTEGRATION',
           description: 'SendGrid/SES integration',
-          readiness: { requirements: 70, design: 50, frontend: 0, backend: 30, integration: 15, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       }
     ],
@@ -324,7 +324,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Blog Listing',
           type: 'SCREEN',
           description: 'Public article list',
-          readiness: { requirements: 85, design: 75, frontend: 40, backend: 25, integration: 10, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
       {
@@ -335,7 +335,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Article Detail',
           type: 'SCREEN',
           description: 'Full article view with comments',
-          readiness: { requirements: 80, design: 70, frontend: 35, backend: 20, integration: 5, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
 
@@ -348,7 +348,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Admin Dashboard',
           type: 'SCREEN',
           description: 'Content management overview',
-          readiness: { requirements: 75, design: 60, frontend: 30, backend: 15, integration: 0, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
       {
@@ -359,7 +359,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Article Editor',
           type: 'SCREEN',
           description: 'Rich text editor for articles',
-          readiness: { requirements: 70, design: 50, frontend: 25, backend: 10, integration: 0, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
 
@@ -372,7 +372,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Content Service',
           type: 'SERVICE',
           description: 'Article CRUD operations',
-          readiness: { requirements: 75, design: 60, frontend: 0, backend: 40, integration: 20, test: 5 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
       {
@@ -383,7 +383,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Media Service',
           type: 'SERVICE',
           description: 'Image upload & processing',
-          readiness: { requirements: 65, design: 45, frontend: 0, backend: 25, integration: 10, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
       {
@@ -394,7 +394,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Search Service',
           type: 'SERVICE',
           description: 'Full-text article search',
-          readiness: { requirements: 60, design: 40, frontend: 0, backend: 20, integration: 5, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
 
@@ -407,7 +407,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Content Database',
           type: 'DATABASE',
           description: 'Articles, authors, categories',
-          readiness: { requirements: 80, design: 70, frontend: 0, backend: 50, integration: 30, test: 10 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
       {
@@ -418,7 +418,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Media Storage',
           type: 'INTEGRATION',
           description: 'S3/CloudFlare for images',
-          readiness: { requirements: 70, design: 50, frontend: 0, backend: 30, integration: 15, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       }
     ],
@@ -452,7 +452,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Overview Dashboard',
           type: 'SCREEN',
           description: 'Key metrics & KPIs',
-          readiness: { requirements: 80, design: 65, frontend: 30, backend: 15, integration: 5, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
       {
@@ -463,7 +463,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Detailed Reports',
           type: 'SCREEN',
           description: 'Filterable data tables',
-          readiness: { requirements: 75, design: 60, frontend: 25, backend: 10, integration: 0, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
       {
@@ -474,7 +474,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Chart Builder',
           type: 'SCREEN',
           description: 'Custom visualization creator',
-          readiness: { requirements: 70, design: 50, frontend: 20, backend: 5, integration: 0, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
 
@@ -487,7 +487,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Analytics Service',
           type: 'SERVICE',
           description: 'Data aggregation & processing',
-          readiness: { requirements: 70, design: 55, frontend: 0, backend: 35, integration: 15, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
       {
@@ -498,7 +498,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Data Pipeline',
           type: 'SERVICE',
           description: 'ETL data processing',
-          readiness: { requirements: 65, design: 45, frontend: 0, backend: 25, integration: 10, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
       {
@@ -509,7 +509,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Report Service',
           type: 'SERVICE',
           description: 'PDF/Excel export generation',
-          readiness: { requirements: 60, design: 40, frontend: 0, backend: 20, integration: 5, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
 
@@ -522,7 +522,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Metrics Database',
           type: 'DATABASE',
           description: 'Time-series analytics data',
-          readiness: { requirements: 75, design: 60, frontend: 0, backend: 40, integration: 20, test: 5 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
       {
@@ -533,7 +533,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Data Warehouse',
           type: 'DATABASE',
           description: 'Historical data storage',
-          readiness: { requirements: 70, design: 55, frontend: 0, backend: 35, integration: 15, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
 
@@ -546,7 +546,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Data Sources',
           type: 'INTEGRATION',
           description: 'APIs, databases, log files',
-          readiness: { requirements: 65, design: 45, frontend: 0, backend: 25, integration: 10, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       }
     ],
@@ -580,7 +580,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Landing Page',
           type: 'SCREEN',
           description: 'Marketing & signup',
-          readiness: { requirements: 85, design: 80, frontend: 60, backend: 20, integration: 10, test: 5 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
       {
@@ -591,7 +591,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'App Dashboard',
           type: 'SCREEN',
           description: 'Main application interface',
-          readiness: { requirements: 80, design: 70, frontend: 40, backend: 25, integration: 15, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
       {
@@ -602,7 +602,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Team Management',
           type: 'SCREEN',
           description: 'Invite & manage team members',
-          readiness: { requirements: 75, design: 60, frontend: 30, backend: 15, integration: 5, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
       {
@@ -613,7 +613,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Billing & Plans',
           type: 'SCREEN',
           description: 'Subscription management',
-          readiness: { requirements: 70, design: 50, frontend: 20, backend: 10, integration: 0, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
 
@@ -626,7 +626,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Tenant Service',
           type: 'SERVICE',
           description: 'Multi-tenant data isolation',
-          readiness: { requirements: 75, design: 60, frontend: 0, backend: 40, integration: 20, test: 5 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
       {
@@ -637,7 +637,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Subscription Service',
           type: 'SERVICE',
           description: 'Billing & plan management',
-          readiness: { requirements: 70, design: 55, frontend: 0, backend: 35, integration: 15, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
       {
@@ -648,7 +648,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Notification Service',
           type: 'SERVICE',
           description: 'Email & in-app notifications',
-          readiness: { requirements: 65, design: 45, frontend: 0, backend: 25, integration: 10, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
 
@@ -661,7 +661,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Tenant Database',
           type: 'DATABASE',
           description: 'Multi-tenant data store',
-          readiness: { requirements: 80, design: 70, frontend: 0, backend: 50, integration: 30, test: 10 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
       {
@@ -672,7 +672,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Billing Database',
           type: 'DATABASE',
           description: 'Subscription & payment data',
-          readiness: { requirements: 75, design: 65, frontend: 0, backend: 45, integration: 25, test: 5 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
 
@@ -685,7 +685,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Payment Gateway',
           type: 'INTEGRATION',
           description: 'Stripe subscription billing',
-          readiness: { requirements: 70, design: 50, frontend: 0, backend: 30, integration: 15, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       },
       {
@@ -696,7 +696,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           label: 'Email Platform',
           type: 'INTEGRATION',
           description: 'Transactional emails',
-          readiness: { requirements: 65, design: 45, frontend: 0, backend: 25, integration: 10, test: 0 }
+          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
         }
       }
     ],

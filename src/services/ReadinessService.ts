@@ -1,6 +1,7 @@
 import { injectable, inject } from 'inversify';
 import { ReadinessState, ReadinessDimension, ReadinessDimensionKey } from '../domain/entities/ReadinessState.js';
 import { ReadinessConfiguration } from '../domain/entities/ReadinessConfiguration.js';
+import { WorkItem } from '../domain/entities/WorkItem.js';
 import type { IWorkItemRepository } from '../adapters/IWorkItemRepository.js';
 import type { AuditTrailService } from './AuditTrailService.js';
 import { ReadinessRepository } from '../infrastructure/postgresql/ReadinessRepository.js';
@@ -118,7 +119,19 @@ export class ReadinessService {
 
       // Update readiness
       const updatedReadiness = workItem.readiness.updateDimension(dimension, newState, newPercentage);
-      const updatedWorkItem = { ...workItem, readiness: updatedReadiness };
+      const updatedWorkItem = new WorkItem(
+        workItem.id,
+        workItem.spec,
+        workItem.title,
+        workItem.description,
+        updatedReadiness,
+        workItem.groupId,
+        workItem.sprintId,
+        workItem.parentId,
+        workItem.deliverableType,
+        workItem.createdAt,
+        new Date()
+      );
 
       // Save to repository
       await this.workItemRepository.save(updatedWorkItem);
@@ -235,7 +248,19 @@ export class ReadinessService {
           newPercentage
         );
 
-        const updatedWorkItem = { ...workItem, readiness: updatedReadiness };
+        const updatedWorkItem = new WorkItem(
+          workItem.id,
+          workItem.spec,
+          workItem.title,
+          workItem.description,
+          updatedReadiness,
+          workItem.groupId,
+          workItem.sprintId,
+          workItem.parentId,
+          workItem.deliverableType,
+          workItem.createdAt,
+          new Date()
+        );
         await this.workItemRepository.save(updatedWorkItem);
 
         results.push(updatedReadiness);
@@ -432,7 +457,7 @@ export class ReadinessService {
   /**
    * Create a new readiness configuration
    */
-  async createConfiguration(configuration: ReadinessConfiguration): Promise<ReadinessConfiguration> {
+  async createConfiguration(configuration: ReadinessConfiguration, tenantId?: string): Promise<ReadinessConfiguration> {
     try {
       // Validate configuration
       const validationErrors = configuration.validate();
@@ -440,7 +465,7 @@ export class ReadinessService {
         throw new Error(`Configuration validation failed: ${validationErrors.join(', ')}`);
       }
 
-      const saved = await this.readinessRepository.createConfiguration(configuration);
+      const saved = await this.readinessRepository.createConfiguration(configuration, tenantId);
 
       // Log creation
       await this.auditTrailService.logStateChange(

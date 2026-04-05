@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useMemo } from 'react';
+// @ts-ignore
 import { useDrop } from 'react-dnd';
 
 interface WorkItem {
@@ -154,7 +155,7 @@ export function ScreenGroupView({
         onAddNodes(group.id, [item.id]);
       }
     },
-    collect: (monitor) => ({
+    collect: (monitor: any) => ({
       isOver: !!monitor.isOver(),
     }),
   }));

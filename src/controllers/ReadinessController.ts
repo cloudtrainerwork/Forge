@@ -532,7 +532,9 @@ export class ReadinessController {
         body.description?.trim()
       );
 
-      const saved = await this.readinessService.createConfiguration(configuration);
+      // Extract tenantId from authenticated request context
+      const tenantId = (req as any).tenant?.tenantId || 'system-default';
+      const saved = await this.readinessService.createConfiguration(configuration, tenantId);
 
       res.status(201).json({
         success: true,

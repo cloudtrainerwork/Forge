@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+// @ts-ignore
 import { useDrag, useDrop } from 'react-dnd';
 
 interface Sprint {
@@ -94,7 +95,7 @@ function DraggableGroup({
   const [{ isDragging }, drag] = useDrag(() => ({
     type: 'group',
     item: { groupId: group.id, sourceSprintId: sprintId },
-    collect: (monitor) => ({
+    collect: (monitor: any) => ({
       isDragging: !!monitor.isDragging(),
     }),
   }));
@@ -165,7 +166,7 @@ function SprintLane({
         onMoveGroup?.(item.groupId, item.sourceSprintId, timelineEntry.sprint.id);
       }
     },
-    collect: (monitor) => ({
+    collect: (monitor: any) => ({
       isOver: !!monitor.isOver(),
     }),
   }));

@@ -1,3 +1,4 @@
 // Domain entities
-export { WorkItem } from './entities/WorkItem.js';
+export { WorkItem, DeliverableType, ImplementationStatus } from './entities/WorkItem.js';
 export { ReadinessState, ReadinessDimension } from './entities/ReadinessState.js';
+export type { ReadinessDimensionKey } from './entities/ReadinessState.js';

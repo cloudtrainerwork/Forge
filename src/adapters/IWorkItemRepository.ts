@@ -72,7 +72,7 @@ export interface IWorkItemRepository {
    */
   logStateChange(
     entityId: string,
-    type: 'WORK_ITEM_CREATED' | 'WORK_ITEM_UPDATED' | 'RELATIONSHIP_ADDED' | 'RELATIONSHIP_REMOVED' | 'READINESS_UPDATED',
+    type: 'WORK_ITEM_CREATED' | 'WORK_ITEM_UPDATED' | 'RELATIONSHIP_ADDED' | 'RELATIONSHIP_REMOVED' | 'READINESS_UPDATED' | 'READINESS_CONFIG_CREATED' | 'READINESS_CONFIG_UPDATED',
     changes: Record<string, any>,
     metadata?: Record<string, any>
   ): Promise<void>;

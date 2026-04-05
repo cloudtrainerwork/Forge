@@ -1,7 +1,7 @@
 // API utility functions for the FORGE system
 import { Node, Edge } from 'reactflow';
 
-const API_BASE_URL = 'http://localhost:3001/api/v1';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
 const REQUEST_TIMEOUT = 30000; // 30 seconds
 const MAX_RETRY_ATTEMPTS = 3;
 const RETRY_DELAY_BASE = 1000; // 1 second base delay
@@ -681,6 +681,11 @@ export async function updateSpecification(
     return result.data;
   } catch (error) {
     if (error instanceof APIError) {
+      // Silently handle 404 — work item only exists locally (template-based)
+      if (error.status === 404) {
+        console.debug('[api] updateSpecification: work item not in DB, saving locally only', workItemId);
+        return specification;
+      }
       throw error;
     }
     throw new APIError(`Failed to update specification: ${error}`);
@@ -727,7 +732,7 @@ export async function updateSpecificationSection(
     const result = await deduplicatedApiCall<{ data: SpecificationSection }>(
       `/specifications/${workItemId}/sections/${sectionName.toLowerCase()}`,
       {
-        method: 'PUT',
+        method: 'PATCH',
         body: JSON.stringify(updatedContent)
       }
     );
@@ -739,6 +744,11 @@ export async function updateSpecificationSection(
     return result.data;
   } catch (error) {
     if (error instanceof APIError) {
+      // Silently handle 404 — work item only exists locally (template-based)
+      if (error.status === 404) {
+        console.debug('[api] updateSpecificationSection: work item not in DB, saving locally only', workItemId);
+        return { ...content, lastUpdated: new Date().toISOString() };
+      }
       throw error;
     }
     throw new APIError(`Failed to update specification section: ${error}`);

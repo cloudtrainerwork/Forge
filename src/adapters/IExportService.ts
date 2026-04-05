@@ -92,4 +92,42 @@ export interface IExportService {
       totalWordCount: number;
     };
   }>;
+
+  /**
+   * EXPORT-03: Preview GSD export before downloading
+   * Generates the GSD plan and returns it as readable JSON without file download
+   */
+  previewGSDExport(workItemId: string): Promise<ExportPreviewResult>;
+}
+
+/**
+ * Preview result for EXPORT-03
+ */
+export interface ExportPreviewResult {
+  workItemId: string;
+  plan: {
+    title: string;
+    metadata: Record<string, any>;
+    waves: Array<{
+      id: string;
+      parallel: boolean;
+      dependencies: string[];
+      tasks: Array<{
+        id: string;
+        name: string;
+        type: string;
+        description: string;
+        files: string[];
+        verification: Record<string, any>;
+        done: string;
+      }>;
+    }>;
+  };
+  xmlPreview: string;
+  validation: {
+    isReady: boolean;
+    issues: string[];
+    completionPercentage: number;
+  };
+  estimatedFileSize: number;
 }

@@ -19,6 +19,20 @@ interface EnvironmentConfig {
   // Application Configuration
   NODE_ENV: 'development' | 'production' | 'test';
   PORT: number;
+
+  // Auth Configuration
+  JWT_SECRET: string;
+  JWT_EXPIRY_SECONDS: number;
+  CORS_ORIGIN: string;
+
+  // OAuth Providers (optional — only needed when providers are enabled)
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
+  AZURE_AD_CLIENT_ID?: string;
+  AZURE_AD_CLIENT_SECRET?: string;
+  AZURE_AD_TENANT_ID?: string;
+  GITHUB_CLIENT_ID?: string;
+  GITHUB_CLIENT_SECRET?: string;
 }
 
 /**
@@ -58,6 +72,15 @@ function validateEnvironment(): EnvironmentConfig {
     errors.push('PORT must be a valid port number (1-65535)');
   }
 
+  // Validate JWT_SECRET (required for auth)
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret || jwtSecret.length < 32) {
+    errors.push('JWT_SECRET is required and must be at least 32 characters');
+  }
+
+  // JWT expiry (default 24h)
+  const jwtExpiry = parseInt(process.env.JWT_EXPIRY_SECONDS || '86400', 10);
+
   // Validate Neo4j URI format
   const neo4jUri = process.env.NEO4J_URI;
   if (neo4jUri && !neo4jUri.match(/^(bolt|bolt\+s|neo4j|neo4j\+s):\/\/.+/)) {
@@ -83,7 +106,17 @@ function validateEnvironment(): EnvironmentConfig {
     POSTGRES_PASSWORD: process.env.POSTGRES_PASSWORD!,
     POSTGRES_DB: process.env.POSTGRES_DB!,
     NODE_ENV: nodeEnv,
-    PORT: port
+    PORT: port,
+    JWT_SECRET: jwtSecret!,
+    JWT_EXPIRY_SECONDS: jwtExpiry,
+    CORS_ORIGIN: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
+    AZURE_AD_CLIENT_ID: process.env.AZURE_AD_CLIENT_ID,
+    AZURE_AD_CLIENT_SECRET: process.env.AZURE_AD_CLIENT_SECRET,
+    AZURE_AD_TENANT_ID: process.env.AZURE_AD_TENANT_ID,
+    GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID,
+    GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET,
   };
 }
 
@@ -111,6 +144,27 @@ export const appConfig = {
   isDevelopment: config.NODE_ENV === 'development',
   isProduction: config.NODE_ENV === 'production',
   isTest: config.NODE_ENV === 'test'
+};
+
+export const authConfig = {
+  jwtSecret: config.JWT_SECRET,
+  jwtExpirySeconds: config.JWT_EXPIRY_SECONDS,
+  corsOrigin: config.CORS_ORIGIN,
+  providers: {
+    google: {
+      clientId: config.GOOGLE_CLIENT_ID,
+      clientSecret: config.GOOGLE_CLIENT_SECRET,
+    },
+    azureAd: {
+      clientId: config.AZURE_AD_CLIENT_ID,
+      clientSecret: config.AZURE_AD_CLIENT_SECRET,
+      tenantId: config.AZURE_AD_TENANT_ID,
+    },
+    github: {
+      clientId: config.GITHUB_CLIENT_ID,
+      clientSecret: config.GITHUB_CLIENT_SECRET,
+    },
+  },
 };
 
 // Type exports

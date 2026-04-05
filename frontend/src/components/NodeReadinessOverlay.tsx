@@ -92,7 +92,7 @@ const NodeReadinessOverlay: React.FC<NodeReadinessOverlayProps> = ({
         readiness={readiness}
         variant="small"
         displayMode={displayMode}
-        onClick={handleClick}
+        onClick={() => handleClick({} as React.MouseEvent)}
         showHover={true}
         isLoading={isLoading}
         hasError={hasError}

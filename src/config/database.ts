@@ -1,6 +1,5 @@
 import * as neo4j from 'neo4j-driver';
 import { PrismaClient } from '@prisma/client';
-import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import { databaseConfig, appConfig } from './environment';
 
@@ -128,12 +127,8 @@ export class PrismaConnectionFactory {
           connectionTimeoutMillis: 2000,
         });
 
-        // Create Prisma adapter with connection pool
-        const adapter = new PrismaPg(this.pool);
-
-        // Create Prisma client with adapter
+        // Create Prisma client with standard connection (uses DATABASE_URL from env)
         this.client = new PrismaClient({
-          adapter,
           log: appConfig.isDevelopment ? ['query', 'info', 'warn', 'error'] : ['error']
         });
 

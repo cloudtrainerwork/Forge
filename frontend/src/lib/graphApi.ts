@@ -24,6 +24,7 @@ export interface BackendWorkItem {
   id: string;
   title?: string;
   description?: string;
+  type?: string;
   spec: Record<string, unknown>;
   readiness: {
     requirements: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETE';
@@ -270,7 +271,7 @@ export function transformWorkItemToNode(workItem: BackendWorkItem): {
   return {
     id: workItem.id,
     label: workItem.title || `Work Item ${workItem.id.slice(0, 8)}`,
-    type: workItem.type || workItem.spec?.type || workItem.spec?.nodeType || 'work-item',
+    type: workItem.type || (workItem.spec?.type as string) || (workItem.spec?.nodeType as string) || 'work-item',
     readiness: {
       requirements: workItem.readiness?.requirements === 'COMPLETE' || false,
       design: workItem.readiness?.design === 'COMPLETE' || false,

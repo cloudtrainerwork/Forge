@@ -1,5 +1,5 @@
 import { injectable, inject } from 'inversify';
-import type { IExportService, ExportResult } from '../adapters/IExportService.js';
+import type { IExportService, ExportResult, ExportPreviewResult } from '../adapters/IExportService.js';
 import type { ISpecificationService } from '../adapters/ISpecificationService.js';
 import type { AuditTrailService } from './AuditTrailService.js';
 import type { GSDXmlGenerator } from './GSDXmlGenerator.js';
@@ -68,20 +68,24 @@ export class ExportService implements IExportService {
         throw new Error(`Cannot export empty specification for work item ${workItemId}. Please add content to at least one section before exporting.`);
       }
 
-      // Check if specification meets minimum completeness threshold
+      // EXPORT-04: Validate specification completeness before export
       const completionPercentage = specification.getCompletionPercentage();
-      if (completionPercentage < 10) {
-        // Log validation failure
+      const validation = await this.validateExportReadiness(workItemId);
+      if (!validation.isReady) {
+        // Log validation failure with detailed issues
         this.auditTrailService.emit('WORK_ITEM_UPDATED', {
           workItemId,
-          type: 'export_failed',
+          type: 'export_blocked',
           operationId,
-          error: 'Specification too incomplete',
+          error: 'Specification incomplete',
+          issues: validation.issues,
           completionPercentage,
+          missingSections: validation.missingSections,
           duration: Date.now() - startTime,
           timestamp: new Date().toISOString()
         });
-        throw new Error(`Specification for work item ${workItemId} is too incomplete for export (${completionPercentage}% complete). Please add more content before exporting.`);
+        const issueList = validation.issues.join(' ');
+        throw new Error(`Export blocked for work item ${workItemId}: specification does not meet completeness requirements. ${issueList}`);
       }
 
       // Check for 5-second performance requirement before continuing
@@ -292,6 +296,74 @@ export class ExportService implements IExportService {
       };
     } catch (error) {
       throw new Error(`Failed to get export metadata: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * EXPORT-03: Preview GSD export before downloading
+   * Generates the GSD plan and returns it as readable JSON with XML preview
+   */
+  async previewGSDExport(workItemId: string): Promise<ExportPreviewResult> {
+    try {
+      // Retrieve the specification
+      const specification = await this.specificationService.getSpecification(workItemId);
+      if (!specification) {
+        throw new Error(`Work item ${workItemId} not found`);
+      }
+
+      // Run validation
+      const validationResult = await this.validateExportReadiness(workItemId);
+
+      // Generate GSD plan (even if not fully valid, for preview purposes)
+      let plan: any = null;
+      let xmlPreview = '';
+      let estimatedFileSize = 0;
+
+      if (specification.hasContent()) {
+        const gsdPlan = this.gsdXmlGenerator.generateGSDPlan(specification, workItemId);
+        const xmlContent = this.gsdXmlGenerator.renderGSDXml(gsdPlan);
+
+        // Convert plan to readable JSON structure
+        plan = {
+          title: gsdPlan.title,
+          metadata: gsdPlan.metadata.toJSON(),
+          waves: gsdPlan.waves.map(wave => ({
+            id: wave.id,
+            parallel: wave.parallel,
+            dependencies: wave.dependencies,
+            tasks: wave.tasks.map(task => ({
+              id: task.id,
+              name: task.name,
+              type: task.type,
+              description: task.description,
+              files: task.files,
+              verification: task.verification.toJSON(),
+              done: task.done
+            }))
+          }))
+        };
+
+        // Provide first 2000 chars of XML as preview
+        xmlPreview = xmlContent.length > 2000
+          ? xmlContent.substring(0, 2000) + '\n<!-- ... truncated for preview -->'
+          : xmlContent;
+
+        estimatedFileSize = Buffer.from(xmlContent, 'utf-8').length;
+      }
+
+      return {
+        workItemId,
+        plan: plan || { title: '', metadata: {}, waves: [] },
+        xmlPreview,
+        validation: {
+          isReady: validationResult.isReady,
+          issues: validationResult.issues,
+          completionPercentage: validationResult.completionPercentage
+        },
+        estimatedFileSize
+      };
+    } catch (error) {
+      throw new Error(`Failed to generate export preview: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }
