@@ -26,7 +26,7 @@ import { useCanvasStore } from '@/stores/canvasStore';
 import TemplateSelector from './TemplateSelector';
 import ProjectNavigator from './ProjectNavigator';
 import { SpecificationEditor } from './specifications/SpecificationEditor';
-import { WORKFLOW_TEMPLATES } from '@/data/workflowTemplates';
+import { WORKFLOW_TEMPLATES, flattenTemplate } from '@/data/workflowTemplates';
 
 // ── Services ───────────────────────────────────────────────────────────────────
 import {
@@ -700,31 +700,28 @@ function ForgeGraphFlow({ projectId }: { projectId?: string }) {
     if (!template) return;
 
     const projectName = customName || template.name;
-    // Use the current projectId (from the URL) if available, otherwise generate one
     const localProjectId = currentProject?.id || projectId || `project-${Date.now()}`;
     const newProject: LocalProject = { id: localProjectId, name: projectName, templateId };
-
     setCurrentProject(newProject);
 
-    const forgeNodes: Node[] = template.nodes.map((node) => ({
+    // Flatten the hierarchical template into a flat list with parentId
+    const allNodes = flattenTemplate(template);
+    const rootNodes = allNodes.filter(n => n.parentId === null);
+
+    // Build ReactFlow nodes for root level only (children load on drill-down)
+    const forgeNodes: Node[] = rootNodes.map((node) => ({
       id: node.id,
       type: 'forgeNode',
-      position: node.position,
+      position: { x: node.x, y: node.y },
       data: {
         id: node.id,
-        type: node.data.type as keyof typeof NTYPES,
-        label: node.data.label,
-        description: node.data.description,
-        readiness: {
-          Requirements: node.data.readiness?.requirements || 0,
-          Design:       node.data.readiness?.design       || 0,
-          Frontend:     node.data.readiness?.frontend      || 0,
-          Backend:      node.data.readiness?.backend       || 0,
-          Integration:  node.data.readiness?.integration   || 0,
-          Test:         node.data.readiness?.test           || 0,
-        },
-        confidence: 'medium',
+        type: node.type as keyof typeof NTYPES,
+        label: node.label,
+        description: node.description,
+        readiness: { Requirements: 0, Design: 0, Frontend: 0, Backend: 0, Integration: 0, Test: 0 },
+        confidence: 'DEFERRED',
         implementationStatus: 'NOT_STARTED' as ImplStatusKey,
+        childCount: node.childCount,
       },
       draggable: true,
     }));
@@ -738,37 +735,41 @@ function ForgeGraphFlow({ projectId }: { projectId?: string }) {
       markerEnd: { type: MarkerType.Arrow, color: C.blue },
     }));
 
-    // Persist project to localStorage
-    const projectWithData: LocalProject = { ...newProject, nodes: forgeNodes, edges: forgeEdges };
-    const updated = addLocalProject(projectWithData);
-    setProjects(updated);
-
     setNodes(forgeNodes);
     setEdges(forgeEdges);
     setShowTemplateSelector(false);
     setLoading(false);
 
-    // Persist work items to DB so spec API calls work
-    const workItems: WorkItemDTO[] = forgeNodes.map(n => ({
-      id: n.id,
-      title: n.data.label,
-      description: n.data.description || '',
-      type: n.data.type || 'task',
-      x: n.position.x,
-      y: n.position.y,
-      readiness: {
-        requirements: 'NOT_STARTED', design: 'NOT_STARTED', frontend: 'NOT_STARTED',
-        backend: 'NOT_STARTED', integration: 'NOT_STARTED', test: 'NOT_STARTED',
-      },
-      confidence: n.data.confidence || 'low',
-      implementationStatus: 'NOT_STARTED',
-    }));
+    // Persist ALL nodes (root + children + grandchildren) to backend
+    // Parents must be created before children (FK constraint)
+    // Sort: depth 0 first, then depth 1, then depth 2
+    const sortedNodes = [...allNodes]; // flattenTemplate already outputs parents before children
 
-    WorkItemService.upsertMany(workItems).then(({ created }) => {
-      if (created > 0) console.log(`[ForgeGraph] ${created} work items saved to DB`);
-    }).catch(err => {
-      console.warn('[ForgeGraph] Failed to save work items to DB:', err);
-    });
+    (async () => {
+      for (const node of sortedNodes) {
+        const dto: WorkItemDTO = {
+          id: node.id,
+          title: node.label,
+          description: node.description,
+          type: node.type,
+          x: node.x,
+          y: node.y,
+          readiness: {
+            requirements: 'NOT_STARTED', design: 'NOT_STARTED', frontend: 'NOT_STARTED',
+            backend: 'NOT_STARTED', integration: 'NOT_STARTED', test: 'NOT_STARTED',
+          },
+          confidence: 'DEFERRED',
+          implementationStatus: 'NOT_STARTED',
+          parentId: node.parentId,
+        };
+        try {
+          await WorkItemService.create(dto);
+        } catch {
+          // May already exist (409) — that's fine
+        }
+      }
+      console.log(`[ForgeGraph] ${sortedNodes.length} template nodes persisted to DB`);
+    })();
 
     setTimeout(() => fitView(), 100);
   }, [fitView]);

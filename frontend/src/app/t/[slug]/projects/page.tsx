@@ -11,9 +11,9 @@ import { useRouter, useParams } from 'next/navigation';
 import { Node, Edge, MarkerType } from 'reactflow';
 import { useProjectStore } from '../../../../stores/projectStore';
 import { useAuth } from '../../../../auth/AuthContext';
-import { WORKFLOW_TEMPLATES, TEMPLATE_CATEGORIES } from '../../../../data/workflowTemplates';
+import { WORKFLOW_TEMPLATES, TEMPLATE_CATEGORIES, flattenTemplate } from '../../../../data/workflowTemplates';
 import { WorkItemService } from '../../../../services';
-import type { ReadinessState } from '../../../../services/WorkItemService';
+// ReadinessState type removed — no longer needed with hierarchical templates
 
 const C = {
   bg: '#08090d',
@@ -86,24 +86,21 @@ function templateToGraph(templateId: string, backendProjectId: string, projectNa
   const template = WORKFLOW_TEMPLATES.find(t => t.id === templateId);
   if (!template) return null;
 
-  const nodes: Node[] = template.nodes.map((node) => ({
+  const allFlat = flattenTemplate(template);
+  const rootOnly = allFlat.filter(n => n.parentId === null);
+
+  const nodes: Node[] = rootOnly.map((node) => ({
     id: node.id,
     type: 'forgeNode',
-    position: node.position,
+    position: { x: node.x, y: node.y },
     data: {
       id: node.id,
-      type: node.data.type,
-      label: node.data.label,
-      description: node.data.description,
-      readiness: {
-        Requirements: node.data.readiness?.requirements || 0,
-        Design:       node.data.readiness?.design       || 0,
-        Frontend:     node.data.readiness?.frontend      || 0,
-        Backend:      node.data.readiness?.backend       || 0,
-        Integration:  node.data.readiness?.integration   || 0,
-        Test:         node.data.readiness?.test           || 0,
-      },
-      confidence: 'medium',
+      type: node.type,
+      label: node.label,
+      description: node.description,
+      readiness: { Requirements: 0, Design: 0, Frontend: 0, Backend: 0, Integration: 0, Test: 0 },
+      confidence: 'DEFERRED',
+      childCount: node.childCount,
     },
     draggable: true,
   }));
@@ -198,26 +195,31 @@ export default function ProjectBrowserPage() {
       // 1. Create backend project
       const project = await createProject(newName.trim(), newDesc.trim() || undefined);
 
-      // 2. If a template was selected, save graph data to localStorage keyed by backend project ID
+      // 2. If a template was selected, persist ALL hierarchy levels to backend
       if (selectedTemplateId) {
-        const result = templateToGraph(selectedTemplateId, project.id, project.name);
-        if (result) {
-          addLocalProject(result.local);
-          // Also persist work items to backend so spec API calls work
-          const workItems = result.nodes.map((n: Node) => ({
-            id: n.id,
-            title: n.data.label,
-            description: n.data.description || '',
-            type: n.data.type || 'task',
-            x: n.position.x,
-            y: n.position.y,
-            readiness: { requirements: 'NOT_STARTED' as ReadinessState, design: 'NOT_STARTED' as ReadinessState, frontend: 'NOT_STARTED' as ReadinessState, backend: 'NOT_STARTED' as ReadinessState, integration: 'NOT_STARTED' as ReadinessState, test: 'NOT_STARTED' as ReadinessState },
-            confidence: n.data.confidence || 'low',
-            implementationStatus: 'NOT_STARTED',
-          }));
-          WorkItemService.upsertMany(workItems).catch(err =>
-            console.warn('[ProjectBrowser] Failed to save template work items:', err)
-          );
+        const template = WORKFLOW_TEMPLATES.find(t => t.id === selectedTemplateId);
+        if (template) {
+          const allFlat = flattenTemplate(template);
+          // Persist parents before children (FK constraint) — flattenTemplate outputs in correct order
+          (async () => {
+            for (const node of allFlat) {
+              try {
+                await WorkItemService.create({
+                  id: node.id,
+                  title: node.label,
+                  description: node.description,
+                  type: node.type,
+                  x: node.x,
+                  y: node.y,
+                  readiness: { requirements: 'NOT_STARTED', design: 'NOT_STARTED', frontend: 'NOT_STARTED', backend: 'NOT_STARTED', integration: 'NOT_STARTED', test: 'NOT_STARTED' },
+                  confidence: 'DEFERRED',
+                  implementationStatus: 'NOT_STARTED',
+                  parentId: node.parentId,
+                });
+              } catch { /* 409 conflict = already exists, that's fine */ }
+            }
+            console.log(`[ProjectBrowser] ${allFlat.length} template nodes persisted`);
+          })();
         }
       }
 
@@ -542,7 +544,7 @@ export default function ProjectBrowserPage() {
                       <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 600 }}>{template.name}</h3>
                       <p style={{ margin: '0 0 12px', fontSize: 13, color: C.textMuted, lineHeight: 1.4 }}>{template.description}</p>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: C.textDim }}>
-                        <span>{template.nodes.length} components &bull; {template.edges.length} connections</span>
+                        <span>{flattenTemplate(template).length} components &bull; {template.edges.length} connections</span>
                         <span>{template.estimatedTimeframe}</span>
                       </div>
                     </div>

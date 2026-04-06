@@ -1,717 +1,507 @@
 'use client';
 
-import { Node, Edge } from 'reactflow';
+/**
+ * Hierarchical workflow templates — reference architectures with 3-level decomposition.
+ *
+ * Each template is a best-practice starting point that teaches real-world
+ * service decomposition through its structure. Children are nested inline
+ * and flattened with parentId during template load.
+ */
 
-// Type definitions
-interface WorkflowNodeData {
+// ── Types ────────────────────────────────────────────────────────────────────
+
+export interface TemplateNode {
+  id: string;
   label: string;
-  type: 'SCREEN' | 'SERVICE' | 'DATABASE' | 'COMPONENT' | 'API' | 'INTEGRATION';
-  readiness?: {
-    requirements: number;
-    design: number;
-    frontend: number;
-    backend: number;
-    integration: number;
-    test: number;
-  };
-  status?: 'committed' | 'bubble' | 'deferred';
+  type: string;
   description?: string;
+  x?: number;
+  y?: number;
+  children?: TemplateNode[];
 }
 
-interface WorkflowTemplate {
+export interface TemplateEdge {
+  id: string;
+  source: string;
+  target: string;
+}
+
+export interface WorkflowTemplate {
   id: string;
   name: string;
   description: string;
   category: 'ecommerce' | 'auth' | 'cms' | 'dashboard' | 'social' | 'fintech' | 'saas';
-  nodes: Node<WorkflowNodeData>[];
-  edges: Edge[];
+  rootNodes: TemplateNode[];
+  edges: TemplateEdge[];
   estimatedComplexity: 'low' | 'medium' | 'high';
   estimatedTimeframe: string;
 }
 
+// ── Helper: flatten nested template into flat list with parentId ─────────────
+
+export interface FlatTemplateNode {
+  id: string;
+  label: string;
+  type: string;
+  description: string;
+  x: number;
+  y: number;
+  parentId: string | null;
+  childCount: number;
+}
+
+export function flattenTemplate(template: WorkflowTemplate): FlatTemplateNode[] {
+  const flat: FlatTemplateNode[] = [];
+
+  function walk(nodes: TemplateNode[], parentId: string | null, depth: number) {
+    nodes.forEach((node, i) => {
+      flat.push({
+        id: node.id,
+        label: node.label,
+        type: node.type,
+        description: node.description || '',
+        x: node.x ?? 100 + i * 280,
+        y: node.y ?? 100 + i * 180,
+        parentId,
+        childCount: node.children?.length ?? 0,
+      });
+      if (node.children) {
+        walk(node.children, node.id, depth + 1);
+      }
+    });
+  }
+
+  walk(template.rootNodes, null, 0);
+  return flat;
+}
+
+// ── Templates ────────────────────────────────────────────────────────────────
+
 export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
-  // E-commerce Application
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // E-COMMERCE APPLICATION
+  // ═══════════════════════════════════════════════════════════════════════════
   {
     id: 'ecommerce-basic',
     name: 'E-commerce Application',
-    description: 'Complete online store with product catalog, shopping cart, and payment processing',
+    description: 'Complete online store with product catalog, shopping cart, payment processing, and authentication',
     category: 'ecommerce',
     estimatedComplexity: 'high',
     estimatedTimeframe: '12-16 weeks',
-    nodes: [
-      // User-facing screens
+    rootNodes: [
       {
-        id: 'product-listing',
-        type: 'SCREEN',
-        position: { x: 100, y: 100 },
-        data: {
-          label: 'Product Listing',
-          type: 'SCREEN',
-          description: 'Browse products with filters',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
+        id: 'product-listing', label: 'Product Listing', type: 'FEATURE', x: 80, y: 60,
+        description: 'Browse and search product catalog',
+        children: [
+          { id: 'pl-search-bar', label: 'Search Bar', type: 'COMPONENT', description: 'Full-text product search with autocomplete' },
+          { id: 'pl-filter-sidebar', label: 'Filter Sidebar', type: 'COMPONENT', description: 'Category, price range, brand filters' },
+          { id: 'pl-product-grid', label: 'Product Grid', type: 'COMPONENT', description: 'Responsive card grid with pagination' },
+          { id: 'pl-product-api', label: 'Product API', type: 'API', description: 'GET /products with query params for search, filter, sort' },
+        ],
       },
       {
-        id: 'product-detail',
-        type: 'SCREEN',
-        position: { x: 100, y: 250 },
-        data: {
-          label: 'Product Detail',
-          type: 'SCREEN',
-          description: 'Product info, reviews, add to cart',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
+        id: 'product-detail', label: 'Product Detail', type: 'FEATURE', x: 380, y: 60,
+        description: 'Product information, reviews, and purchase',
+        children: [
+          { id: 'pd-image-gallery', label: 'Image Gallery', type: 'COMPONENT', description: 'Zoomable product images with thumbnails' },
+          { id: 'pd-review-system', label: 'Review System', type: 'COMPONENT', description: 'Star ratings, written reviews, helpful votes' },
+          { id: 'pd-add-to-cart', label: 'Add to Cart', type: 'COMPONENT', description: 'Quantity selector, size/variant picker, cart button' },
+          { id: 'pd-related-products', label: 'Related Products', type: 'COMPONENT', description: 'ML-based product recommendations' },
+        ],
       },
       {
-        id: 'shopping-cart',
-        type: 'SCREEN',
-        position: { x: 100, y: 400 },
-        data: {
-          label: 'Shopping Cart',
-          type: 'SCREEN',
-          description: 'View cart items, modify quantities',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
+        id: 'shopping-cart', label: 'Shopping Cart', type: 'FEATURE', x: 680, y: 60,
+        description: 'Cart management and checkout preparation',
+        children: [
+          { id: 'sc-cart-items', label: 'Cart Items List', type: 'COMPONENT', description: 'Line items with quantity controls and remove' },
+          { id: 'sc-price-calc', label: 'Price Calculator', type: 'SERVICE', description: 'Subtotal, tax, shipping, discounts, promo codes' },
+          { id: 'sc-cart-storage', label: 'Cart Storage', type: 'DATABASE', description: 'Session-based cart with guest merge on login' },
+        ],
       },
       {
-        id: 'checkout',
-        type: 'SCREEN',
-        position: { x: 100, y: 550 },
-        data: {
-          label: 'Checkout',
-          type: 'SCREEN',
-          description: 'Payment & shipping info',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
-      },
-
-      // Services
-      {
-        id: 'product-service',
-        type: 'SERVICE',
-        position: { x: 400, y: 175 },
-        data: {
-          label: 'Product Service',
-          type: 'SERVICE',
-          description: 'Product CRUD operations',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
+        id: 'checkout', label: 'Checkout', type: 'FEATURE', x: 80, y: 320,
+        description: 'Payment, shipping, and order placement',
+        children: [
+          { id: 'co-shipping-form', label: 'Shipping Form', type: 'COMPONENT', description: 'Address autocomplete, shipping method selection' },
+          { id: 'co-payment-form', label: 'Payment Form', type: 'COMPONENT', description: 'Credit card, Apple Pay, Google Pay inputs' },
+          { id: 'co-order-summary', label: 'Order Summary', type: 'COMPONENT', description: 'Final review before purchase confirmation' },
+        ],
       },
       {
-        id: 'cart-service',
-        type: 'SERVICE',
-        position: { x: 400, y: 325 },
-        data: {
-          label: 'Cart Service',
-          type: 'SERVICE',
-          description: 'Session-based cart management',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
+        id: 'auth-service', label: 'Auth Service', type: 'SERVICE', x: 380, y: 320,
+        description: 'Authentication and identity management',
+        children: [
+          {
+            id: 'as-oauth-client', label: 'OAuth Client', type: 'INTEGRATION',
+            description: 'External identity provider integration',
+            children: [
+              { id: 'as-google', label: 'Google Provider', type: 'INTEGRATION', description: 'Google OIDC sign-in flow' },
+              { id: 'as-microsoft', label: 'Microsoft Provider', type: 'INTEGRATION', description: 'Microsoft Entra ID (Azure AD) flow' },
+              { id: 'as-github', label: 'GitHub Provider', type: 'INTEGRATION', description: 'GitHub OAuth app authorization' },
+            ],
+          },
+          {
+            id: 'as-jwt-handler', label: 'JWT Handler', type: 'SERVICE',
+            description: 'Token lifecycle management',
+            children: [
+              { id: 'as-token-validator', label: 'Token Validator', type: 'COMPONENT', description: 'Signature verification and expiry check' },
+              { id: 'as-refresh-logic', label: 'Refresh Logic', type: 'COMPONENT', description: 'Refresh token rotation and revocation' },
+            ],
+          },
+          { id: 'as-session-store', label: 'Session Store', type: 'DATABASE', description: 'Redis-backed session and token storage' },
+        ],
       },
       {
-        id: 'payment-service',
-        type: 'SERVICE',
-        position: { x: 400, y: 475 },
-        data: {
-          label: 'Payment Service',
-          type: 'SERVICE',
-          description: 'Stripe/PayPal integration',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
+        id: 'order-service', label: 'Order Service', type: 'SERVICE', x: 680, y: 320,
+        description: 'Order processing, payment, and fulfillment',
+        children: [
+          { id: 'os-order-processor', label: 'Order Processor', type: 'SERVICE', description: 'Order state machine: placed → paid → shipped → delivered' },
+          {
+            id: 'os-payment-gw', label: 'Payment Gateway', type: 'INTEGRATION',
+            description: 'Payment provider abstraction layer',
+            children: [
+              { id: 'os-stripe', label: 'Stripe Integration', type: 'INTEGRATION', description: 'Stripe Checkout and Payment Intents API' },
+              { id: 'os-paypal', label: 'PayPal Integration', type: 'INTEGRATION', description: 'PayPal REST API and Express Checkout' },
+            ],
+          },
+          { id: 'os-email-notify', label: 'Email Notifications', type: 'SERVICE', description: 'Order confirmation, shipping updates, receipts' },
+          { id: 'os-order-db', label: 'Order Database', type: 'DATABASE', description: 'Orders, line items, payment records, shipping' },
+        ],
       },
-      {
-        id: 'order-service',
-        type: 'SERVICE',
-        position: { x: 400, y: 625 },
-        data: {
-          label: 'Order Service',
-          type: 'SERVICE',
-          description: 'Order processing & fulfillment',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
-      },
-
-      // Databases
-      {
-        id: 'product-db',
-        type: 'DATABASE',
-        position: { x: 700, y: 100 },
-        data: {
-          label: 'Product Database',
-          type: 'DATABASE',
-          description: 'Product catalog & inventory',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
-      },
-      {
-        id: 'user-db',
-        type: 'DATABASE',
-        position: { x: 700, y: 250 },
-        data: {
-          label: 'User Database',
-          type: 'DATABASE',
-          description: 'Customer accounts & profiles',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
-      },
-      {
-        id: 'order-db',
-        type: 'DATABASE',
-        position: { x: 700, y: 400 },
-        data: {
-          label: 'Order Database',
-          type: 'DATABASE',
-          description: 'Transaction & order history',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
-      }
     ],
     edges: [
-      { id: 'e1', source: 'product-listing', target: 'product-service', animated: true },
-      { id: 'e2', source: 'product-detail', target: 'product-service', animated: true },
-      { id: 'e3', source: 'shopping-cart', target: 'cart-service', animated: true },
-      { id: 'e4', source: 'checkout', target: 'payment-service', animated: true },
-      { id: 'e5', source: 'checkout', target: 'order-service', animated: true },
-      { id: 'e6', source: 'product-service', target: 'product-db' },
-      { id: 'e7', source: 'cart-service', target: 'user-db' },
-      { id: 'e8', source: 'payment-service', target: 'order-db' },
-      { id: 'e9', source: 'order-service', target: 'order-db' }
-    ]
+      { id: 'e1', source: 'product-listing', target: 'product-detail' },
+      { id: 'e2', source: 'product-detail', target: 'shopping-cart' },
+      { id: 'e3', source: 'shopping-cart', target: 'checkout' },
+      { id: 'e4', source: 'checkout', target: 'order-service' },
+      { id: 'e5', source: 'checkout', target: 'auth-service' },
+      { id: 'e6', source: 'order-service', target: 'auth-service' },
+    ],
   },
 
-  // Authentication System
+  // ═══════════════════════════════════════════════════════════════════════════
+  // AUTHENTICATION SYSTEM
+  // ═══════════════════════════════════════════════════════════════════════════
   {
     id: 'auth-system',
     name: 'Authentication System',
-    description: 'Complete user authentication with registration, login, and password reset',
+    description: 'Complete identity management with OAuth, JWT, password reset, and role-based access',
     category: 'auth',
     estimatedComplexity: 'medium',
     estimatedTimeframe: '4-6 weeks',
-    nodes: [
+    rootNodes: [
       {
-        id: 'login-screen',
-        type: 'SCREEN',
-        position: { x: 100, y: 100 },
-        data: {
-          label: 'Login Screen',
-          type: 'SCREEN',
-          description: 'Email/password authentication',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
+        id: 'login-screen', label: 'Login Screen', type: 'SCREEN', x: 80, y: 60,
+        description: 'User sign-in with multiple methods',
+        children: [
+          { id: 'ls-email-form', label: 'Email/Password Form', type: 'COMPONENT', description: 'Email + password inputs with validation' },
+          { id: 'ls-oauth-buttons', label: 'OAuth Buttons', type: 'COMPONENT', description: 'Google, Microsoft, GitHub sign-in buttons' },
+          { id: 'ls-remember-me', label: 'Remember Me', type: 'COMPONENT', description: 'Persistent session toggle with secure cookie' },
+        ],
       },
       {
-        id: 'register-screen',
-        type: 'SCREEN',
-        position: { x: 100, y: 250 },
-        data: {
-          label: 'Registration',
-          type: 'SCREEN',
-          description: 'New user signup form',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
+        id: 'registration', label: 'Registration', type: 'SCREEN', x: 380, y: 60,
+        description: 'New user account creation',
+        children: [
+          { id: 'rg-signup-form', label: 'Signup Form', type: 'COMPONENT', description: 'Name, email, password with strength meter' },
+          { id: 'rg-email-verify', label: 'Email Verification', type: 'SERVICE', description: 'Send verification link, confirm token' },
+          { id: 'rg-terms', label: 'Terms Acceptance', type: 'COMPONENT', description: 'ToS and privacy policy consent checkbox' },
+        ],
       },
       {
-        id: 'forgot-password',
-        type: 'SCREEN',
-        position: { x: 100, y: 400 },
-        data: {
-          label: 'Forgot Password',
-          type: 'SCREEN',
-          description: 'Password reset request',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
+        id: 'password-reset', label: 'Password Reset', type: 'SCREEN', x: 680, y: 60,
+        description: 'Forgot password and recovery flow',
+        children: [
+          { id: 'pr-request-form', label: 'Reset Request Form', type: 'COMPONENT', description: 'Email input to request password reset' },
+          { id: 'pr-token-service', label: 'Reset Token Service', type: 'SERVICE', description: 'Generate, validate, expire reset tokens' },
+          { id: 'pr-new-pw-form', label: 'New Password Form', type: 'COMPONENT', description: 'Set new password with confirmation field' },
+        ],
       },
       {
-        id: 'profile-screen',
-        type: 'SCREEN',
-        position: { x: 100, y: 550 },
-        data: {
-          label: 'User Profile',
-          type: 'SCREEN',
-          description: 'Edit user information',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
-      },
-
-      // Services
-      {
-        id: 'auth-service',
-        type: 'SERVICE',
-        position: { x: 400, y: 200 },
-        data: {
-          label: 'Auth Service',
-          type: 'SERVICE',
-          description: 'JWT token management',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
-      },
-      {
-        id: 'email-service',
-        type: 'SERVICE',
-        position: { x: 400, y: 350 },
-        data: {
-          label: 'Email Service',
-          type: 'SERVICE',
-          description: 'Send verification & reset emails',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
+        id: 'auth-core', label: 'Auth Service', type: 'SERVICE', x: 80, y: 320,
+        description: 'Core authentication and authorization engine',
+        children: [
+          {
+            id: 'ac-oauth', label: 'OAuth Provider', type: 'INTEGRATION',
+            description: 'External identity provider management',
+            children: [
+              { id: 'ac-google', label: 'Google OIDC', type: 'INTEGRATION', description: 'OpenID Connect with Google Identity' },
+              { id: 'ac-microsoft', label: 'Microsoft Entra', type: 'INTEGRATION', description: 'Azure AD / Entra ID integration' },
+              { id: 'ac-github', label: 'GitHub OAuth', type: 'INTEGRATION', description: 'GitHub OAuth app for developer sign-in' },
+            ],
+          },
+          {
+            id: 'ac-jwt', label: 'JWT Service', type: 'SERVICE',
+            description: 'JSON Web Token management',
+            children: [
+              { id: 'ac-token-gen', label: 'Token Generation', type: 'COMPONENT', description: 'HS256/RS256 signing with claims' },
+              { id: 'ac-token-val', label: 'Token Validation', type: 'COMPONENT', description: 'Signature verify, expiry, issuer check' },
+              { id: 'ac-refresh', label: 'Refresh Rotation', type: 'COMPONENT', description: 'Refresh token rotation with family tracking' },
+            ],
+          },
+          { id: 'ac-hasher', label: 'Password Hasher', type: 'SERVICE', description: 'bcrypt/argon2 hashing with salt rounds' },
+          { id: 'ac-session', label: 'Session Manager', type: 'SERVICE', description: 'Server-side session with Redis backing' },
+        ],
       },
       {
-        id: 'user-service',
-        type: 'SERVICE',
-        position: { x: 400, y: 500 },
-        data: {
-          label: 'User Service',
-          type: 'SERVICE',
-          description: 'User CRUD operations',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
+        id: 'user-service', label: 'User Service', type: 'SERVICE', x: 480, y: 320,
+        description: 'User profile and access management',
+        children: [
+          { id: 'us-profile', label: 'Profile Manager', type: 'SERVICE', description: 'User CRUD, avatar upload, preferences' },
+          { id: 'us-roles', label: 'Role & Permissions', type: 'SERVICE', description: 'RBAC with hierarchical role inheritance' },
+          { id: 'us-db', label: 'User Database', type: 'DATABASE', description: 'Users, accounts, sessions, roles tables' },
+          { id: 'us-email', label: 'Email Provider', type: 'INTEGRATION', description: 'SendGrid/SES for transactional emails' },
+        ],
       },
-
-      // Database
-      {
-        id: 'user-db',
-        type: 'DATABASE',
-        position: { x: 700, y: 300 },
-        data: {
-          label: 'User Database',
-          type: 'DATABASE',
-          description: 'User accounts & sessions',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
-      },
-
-      // External integrations
-      {
-        id: 'email-provider',
-        type: 'INTEGRATION',
-        position: { x: 700, y: 450 },
-        data: {
-          label: 'Email Provider',
-          type: 'INTEGRATION',
-          description: 'SendGrid/SES integration',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
-      }
     ],
     edges: [
-      { id: 'e1', source: 'login-screen', target: 'auth-service', animated: true },
-      { id: 'e2', source: 'register-screen', target: 'auth-service', animated: true },
-      { id: 'e3', source: 'forgot-password', target: 'email-service', animated: true },
-      { id: 'e4', source: 'profile-screen', target: 'user-service', animated: true },
-      { id: 'e5', source: 'auth-service', target: 'user-db' },
-      { id: 'e6', source: 'user-service', target: 'user-db' },
-      { id: 'e7', source: 'email-service', target: 'email-provider' },
-      { id: 'e8', source: 'email-service', target: 'user-db' }
-    ]
+      { id: 'e1', source: 'login-screen', target: 'auth-core' },
+      { id: 'e2', source: 'registration', target: 'auth-core' },
+      { id: 'e3', source: 'registration', target: 'user-service' },
+      { id: 'e4', source: 'password-reset', target: 'auth-core' },
+      { id: 'e5', source: 'auth-core', target: 'user-service' },
+    ],
   },
 
-  // Content Management System
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CONTENT MANAGEMENT SYSTEM
+  // ═══════════════════════════════════════════════════════════════════════════
   {
     id: 'cms-basic',
     name: 'Content Management System',
-    description: 'Blog/CMS with article creation, editing, and publication',
+    description: 'Blog/CMS with rich editing, media management, and SEO optimization',
     category: 'cms',
     estimatedComplexity: 'medium',
     estimatedTimeframe: '6-8 weeks',
-    nodes: [
-      // Public screens
+    rootNodes: [
       {
-        id: 'blog-listing',
-        type: 'SCREEN',
-        position: { x: 100, y: 100 },
-        data: {
-          label: 'Blog Listing',
-          type: 'SCREEN',
-          description: 'Public article list',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
+        id: 'blog-listing', label: 'Blog Listing', type: 'SCREEN', x: 80, y: 60,
+        description: 'Public article feed with discovery',
+        children: [
+          { id: 'bl-article-cards', label: 'Article Cards', type: 'COMPONENT', description: 'Thumbnail, title, excerpt, author, date' },
+          { id: 'bl-category-filter', label: 'Category Filter', type: 'COMPONENT', description: 'Tag-based and category-based filtering' },
+          { id: 'bl-search', label: 'Search Bar', type: 'COMPONENT', description: 'Full-text article search with highlighting' },
+        ],
       },
       {
-        id: 'article-detail',
-        type: 'SCREEN',
-        position: { x: 100, y: 250 },
-        data: {
-          label: 'Article Detail',
-          type: 'SCREEN',
-          description: 'Full article view with comments',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
-      },
-
-      // Admin screens
-      {
-        id: 'admin-dashboard',
-        type: 'SCREEN',
-        position: { x: 100, y: 400 },
-        data: {
-          label: 'Admin Dashboard',
-          type: 'SCREEN',
-          description: 'Content management overview',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
+        id: 'article-editor', label: 'Article Editor', type: 'SCREEN', x: 380, y: 60,
+        description: 'Rich content authoring experience',
+        children: [
+          { id: 'ae-rich-text', label: 'Rich Text Editor', type: 'COMPONENT', description: 'TipTap/ProseMirror with markdown shortcuts' },
+          { id: 'ae-image-upload', label: 'Image Uploader', type: 'COMPONENT', description: 'Drag-drop with resize, crop, alt text' },
+          { id: 'ae-seo', label: 'SEO Settings', type: 'COMPONENT', description: 'Meta title, description, OG tags, slug editor' },
+          { id: 'ae-publish', label: 'Publish Workflow', type: 'SERVICE', description: 'Draft → Review → Scheduled → Published states' },
+        ],
       },
       {
-        id: 'article-editor',
-        type: 'SCREEN',
-        position: { x: 100, y: 550 },
-        data: {
-          label: 'Article Editor',
-          type: 'SCREEN',
-          description: 'Rich text editor for articles',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
-      },
-
-      // Services
-      {
-        id: 'content-service',
-        type: 'SERVICE',
-        position: { x: 400, y: 200 },
-        data: {
-          label: 'Content Service',
-          type: 'SERVICE',
-          description: 'Article CRUD operations',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
+        id: 'content-service', label: 'Content Service', type: 'SERVICE', x: 680, y: 60,
+        description: 'Content storage and retrieval engine',
+        children: [
+          { id: 'cs-crud', label: 'Article CRUD', type: 'API', description: 'REST endpoints for create, read, update, delete' },
+          { id: 'cs-versioning', label: 'Version Control', type: 'SERVICE', description: 'Article revision history with diff and restore' },
+          { id: 'cs-db', label: 'Content Database', type: 'DATABASE', description: 'Articles, authors, categories, tags tables' },
+          { id: 'cs-search-idx', label: 'Search Index', type: 'DATABASE', description: 'Elasticsearch/Meilisearch for full-text search' },
+        ],
       },
       {
-        id: 'media-service',
-        type: 'SERVICE',
-        position: { x: 400, y: 350 },
-        data: {
-          label: 'Media Service',
-          type: 'SERVICE',
-          description: 'Image upload & processing',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
+        id: 'media-service', label: 'Media Service', type: 'SERVICE', x: 80, y: 320,
+        description: 'Image and file management pipeline',
+        children: [
+          { id: 'ms-processor', label: 'Image Processor', type: 'SERVICE', description: 'Resize, compress, generate thumbnails, WebP' },
+          { id: 'ms-cdn', label: 'CDN Upload', type: 'INTEGRATION', description: 'CloudFlare R2 / AWS S3 with signed URLs' },
+          { id: 'ms-storage', label: 'Media Storage', type: 'DATABASE', description: 'File metadata, dimensions, MIME types' },
+        ],
       },
       {
-        id: 'search-service',
-        type: 'SERVICE',
-        position: { x: 400, y: 500 },
-        data: {
-          label: 'Search Service',
-          type: 'SERVICE',
-          description: 'Full-text article search',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
+        id: 'admin-dashboard', label: 'Admin Dashboard', type: 'SCREEN', x: 480, y: 320,
+        description: 'Content operations and moderation',
+        children: [
+          { id: 'ad-analytics', label: 'Content Analytics', type: 'COMPONENT', description: 'Views, read time, engagement metrics' },
+          { id: 'ad-users', label: 'User Management', type: 'COMPONENT', description: 'Author roles, permissions, activity log' },
+          { id: 'ad-comments', label: 'Comment Moderation', type: 'COMPONENT', description: 'Approve, reject, flag, bulk actions' },
+        ],
       },
-
-      // Storage
-      {
-        id: 'content-db',
-        type: 'DATABASE',
-        position: { x: 700, y: 150 },
-        data: {
-          label: 'Content Database',
-          type: 'DATABASE',
-          description: 'Articles, authors, categories',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
-      },
-      {
-        id: 'media-storage',
-        type: 'INTEGRATION',
-        position: { x: 700, y: 350 },
-        data: {
-          label: 'Media Storage',
-          type: 'INTEGRATION',
-          description: 'S3/CloudFlare for images',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
-      }
     ],
     edges: [
-      { id: 'e1', source: 'blog-listing', target: 'content-service', animated: true },
-      { id: 'e2', source: 'article-detail', target: 'content-service', animated: true },
-      { id: 'e3', source: 'admin-dashboard', target: 'content-service', animated: true },
-      { id: 'e4', source: 'article-editor', target: 'content-service', animated: true },
-      { id: 'e5', source: 'article-editor', target: 'media-service', animated: true },
-      { id: 'e6', source: 'content-service', target: 'content-db' },
-      { id: 'e7', source: 'media-service', target: 'media-storage' },
-      { id: 'e8', source: 'search-service', target: 'content-db' }
-    ]
+      { id: 'e1', source: 'blog-listing', target: 'content-service' },
+      { id: 'e2', source: 'article-editor', target: 'content-service' },
+      { id: 'e3', source: 'article-editor', target: 'media-service' },
+      { id: 'e4', source: 'admin-dashboard', target: 'content-service' },
+      { id: 'e5', source: 'content-service', target: 'media-service' },
+    ],
   },
 
-  // Analytics Dashboard
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ANALYTICS DASHBOARD
+  // ═══════════════════════════════════════════════════════════════════════════
   {
     id: 'analytics-dashboard',
     name: 'Analytics Dashboard',
-    description: 'Real-time data visualization and reporting dashboard',
+    description: 'Real-time data visualization with ETL pipeline and alerting',
     category: 'dashboard',
     estimatedComplexity: 'high',
     estimatedTimeframe: '8-10 weeks',
-    nodes: [
-      // Dashboard screens
+    rootNodes: [
       {
-        id: 'overview-dashboard',
-        type: 'SCREEN',
-        position: { x: 100, y: 100 },
-        data: {
-          label: 'Overview Dashboard',
-          type: 'SCREEN',
-          description: 'Key metrics & KPIs',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
+        id: 'overview-dashboard', label: 'Overview Dashboard', type: 'SCREEN', x: 80, y: 60,
+        description: 'Executive summary with key metrics',
+        children: [
+          { id: 'od-kpi-cards', label: 'KPI Cards', type: 'COMPONENT', description: 'Revenue, users, conversion rate, churn' },
+          { id: 'od-trend-charts', label: 'Trend Charts', type: 'COMPONENT', description: 'Line/area charts with period comparison' },
+          { id: 'od-alert-panel', label: 'Alert Panel', type: 'COMPONENT', description: 'Active alerts with severity and actions' },
+          { id: 'od-date-picker', label: 'Date Range Picker', type: 'COMPONENT', description: 'Preset ranges and custom date selection' },
+        ],
       },
       {
-        id: 'detailed-reports',
-        type: 'SCREEN',
-        position: { x: 100, y: 250 },
-        data: {
-          label: 'Detailed Reports',
-          type: 'SCREEN',
-          description: 'Filterable data tables',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
+        id: 'report-builder', label: 'Report Builder', type: 'SCREEN', x: 480, y: 60,
+        description: 'Custom report creation and export',
+        children: [
+          { id: 'rb-query', label: 'Query Builder', type: 'COMPONENT', description: 'Visual filter/group/aggregate builder' },
+          { id: 'rb-charts', label: 'Chart Renderer', type: 'COMPONENT', description: 'Bar, line, pie, scatter, heatmap rendering' },
+          { id: 'rb-export', label: 'Export Engine', type: 'SERVICE', description: 'PDF, Excel, CSV export generation' },
+          { id: 'rb-scheduled', label: 'Scheduled Reports', type: 'SERVICE', description: 'Cron-based report generation and email delivery' },
+        ],
       },
       {
-        id: 'chart-builder',
-        type: 'SCREEN',
-        position: { x: 100, y: 400 },
-        data: {
-          label: 'Chart Builder',
-          type: 'SCREEN',
-          description: 'Custom visualization creator',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
-      },
-
-      // Services
-      {
-        id: 'analytics-service',
-        type: 'SERVICE',
-        position: { x: 400, y: 150 },
-        data: {
-          label: 'Analytics Service',
-          type: 'SERVICE',
-          description: 'Data aggregation & processing',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
+        id: 'data-pipeline', label: 'Data Pipeline', type: 'SERVICE', x: 80, y: 320,
+        description: 'Extract, transform, load data processing',
+        children: [
+          { id: 'dp-etl', label: 'ETL Processor', type: 'SERVICE', description: 'Batch and streaming data transformation jobs' },
+          { id: 'dp-validator', label: 'Data Validator', type: 'COMPONENT', description: 'Schema validation, null checks, type coercion' },
+          {
+            id: 'dp-connectors', label: 'Source Connectors', type: 'INTEGRATION',
+            description: 'Data source adapters',
+            children: [
+              { id: 'dp-db-conn', label: 'Database Connector', type: 'INTEGRATION', description: 'PostgreSQL, MySQL, MongoDB adapters' },
+              { id: 'dp-api-conn', label: 'API Connector', type: 'INTEGRATION', description: 'REST/GraphQL polling with auth' },
+              { id: 'dp-file-conn', label: 'File Connector', type: 'INTEGRATION', description: 'CSV, JSON, Parquet file ingestion' },
+            ],
+          },
+          { id: 'dp-warehouse', label: 'Data Warehouse', type: 'DATABASE', description: 'Columnar storage for analytical queries' },
+        ],
       },
       {
-        id: 'data-pipeline',
-        type: 'SERVICE',
-        position: { x: 400, y: 300 },
-        data: {
-          label: 'Data Pipeline',
-          type: 'SERVICE',
-          description: 'ETL data processing',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
+        id: 'analytics-engine', label: 'Analytics Engine', type: 'SERVICE', x: 380, y: 320,
+        description: 'Metric computation and caching',
+        children: [
+          { id: 'an-aggregation', label: 'Aggregation Service', type: 'SERVICE', description: 'Pre-computed rollups: hourly, daily, weekly' },
+          { id: 'an-cache', label: 'Cache Layer', type: 'SERVICE', description: 'Redis-backed query result cache with TTL' },
+          { id: 'an-metrics-db', label: 'Metrics Database', type: 'DATABASE', description: 'TimescaleDB / InfluxDB for time-series data' },
+        ],
       },
       {
-        id: 'report-service',
-        type: 'SERVICE',
-        position: { x: 400, y: 450 },
-        data: {
-          label: 'Report Service',
-          type: 'SERVICE',
-          description: 'PDF/Excel export generation',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
+        id: 'alert-system', label: 'Alert System', type: 'SERVICE', x: 680, y: 320,
+        description: 'Threshold monitoring and notifications',
+        children: [
+          { id: 'al-monitor', label: 'Threshold Monitor', type: 'SERVICE', description: 'Rule engine with anomaly detection' },
+          { id: 'al-dispatch', label: 'Notification Dispatcher', type: 'SERVICE', description: 'Email, Slack, PagerDuty alert routing' },
+          { id: 'al-history', label: 'Alert History', type: 'DATABASE', description: 'Alert log with acknowledgment tracking' },
+        ],
       },
-
-      // Storage
-      {
-        id: 'metrics-db',
-        type: 'DATABASE',
-        position: { x: 700, y: 100 },
-        data: {
-          label: 'Metrics Database',
-          type: 'DATABASE',
-          description: 'Time-series analytics data',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
-      },
-      {
-        id: 'warehouse-db',
-        type: 'DATABASE',
-        position: { x: 700, y: 250 },
-        data: {
-          label: 'Data Warehouse',
-          type: 'DATABASE',
-          description: 'Historical data storage',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
-      },
-
-      // External sources
-      {
-        id: 'data-sources',
-        type: 'INTEGRATION',
-        position: { x: 700, y: 400 },
-        data: {
-          label: 'Data Sources',
-          type: 'INTEGRATION',
-          description: 'APIs, databases, log files',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
-      }
     ],
     edges: [
-      { id: 'e1', source: 'overview-dashboard', target: 'analytics-service', animated: true },
-      { id: 'e2', source: 'detailed-reports', target: 'analytics-service', animated: true },
-      { id: 'e3', source: 'chart-builder', target: 'analytics-service', animated: true },
-      { id: 'e4', source: 'detailed-reports', target: 'report-service', animated: true },
-      { id: 'e5', source: 'analytics-service', target: 'metrics-db' },
-      { id: 'e6', source: 'data-pipeline', target: 'warehouse-db' },
-      { id: 'e7', source: 'data-pipeline', target: 'data-sources' },
-      { id: 'e8', source: 'analytics-service', target: 'warehouse-db' }
-    ]
+      { id: 'e1', source: 'overview-dashboard', target: 'analytics-engine' },
+      { id: 'e2', source: 'report-builder', target: 'analytics-engine' },
+      { id: 'e3', source: 'data-pipeline', target: 'analytics-engine' },
+      { id: 'e4', source: 'analytics-engine', target: 'alert-system' },
+      { id: 'e5', source: 'overview-dashboard', target: 'alert-system' },
+    ],
   },
 
-  // SaaS Application
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SAAS PLATFORM
+  // ═══════════════════════════════════════════════════════════════════════════
   {
     id: 'saas-basic',
-    name: 'SaaS Application',
-    description: 'Multi-tenant SaaS with subscription billing and team management',
+    name: 'SaaS Platform',
+    description: 'Multi-tenant SaaS with subscription billing, team management, and notifications',
     category: 'saas',
     estimatedComplexity: 'high',
     estimatedTimeframe: '16-20 weeks',
-    nodes: [
-      // User screens
+    rootNodes: [
       {
-        id: 'landing-page',
-        type: 'SCREEN',
-        position: { x: 50, y: 100 },
-        data: {
-          label: 'Landing Page',
-          type: 'SCREEN',
-          description: 'Marketing & signup',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
+        id: 'landing-page', label: 'Landing Page', type: 'SCREEN', x: 80, y: 60,
+        description: 'Marketing site and signup funnel',
+        children: [
+          { id: 'lp-hero', label: 'Hero Section', type: 'COMPONENT', description: 'Value proposition with demo CTA' },
+          { id: 'lp-pricing', label: 'Pricing Table', type: 'COMPONENT', description: 'Plan comparison with feature matrix' },
+          { id: 'lp-features', label: 'Feature Showcase', type: 'COMPONENT', description: 'Animated feature highlights with screenshots' },
+          { id: 'lp-signup', label: 'Signup CTA', type: 'COMPONENT', description: 'Email capture with plan pre-selection' },
+        ],
       },
       {
-        id: 'app-dashboard',
-        type: 'SCREEN',
-        position: { x: 50, y: 250 },
-        data: {
-          label: 'App Dashboard',
-          type: 'SCREEN',
-          description: 'Main application interface',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
+        id: 'app-dashboard', label: 'App Dashboard', type: 'SCREEN', x: 480, y: 60,
+        description: 'Main application workspace',
+        children: [
+          { id: 'da-activity', label: 'Activity Feed', type: 'COMPONENT', description: 'Team activity stream with real-time updates' },
+          { id: 'da-quick-actions', label: 'Quick Actions', type: 'COMPONENT', description: 'Frequent tasks, shortcuts, recent items' },
+          { id: 'da-stats', label: 'Stats Overview', type: 'COMPONENT', description: 'Usage metrics, storage, team size' },
+        ],
       },
       {
-        id: 'team-management',
-        type: 'SCREEN',
-        position: { x: 50, y: 400 },
-        data: {
-          label: 'Team Management',
-          type: 'SCREEN',
-          description: 'Invite & manage team members',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
+        id: 'tenant-service', label: 'Tenant Service', type: 'SERVICE', x: 80, y: 320,
+        description: 'Multi-tenant isolation and provisioning',
+        children: [
+          { id: 'ts-provision', label: 'Tenant Provisioning', type: 'SERVICE', description: 'Workspace creation, subdomain setup, defaults' },
+          {
+            id: 'ts-isolation', label: 'Data Isolation', type: 'SERVICE',
+            description: 'Tenant data boundary enforcement',
+            children: [
+              { id: 'ts-rls', label: 'Row-Level Security', type: 'COMPONENT', description: 'PostgreSQL RLS policies per tenant' },
+              { id: 'ts-schema-sep', label: 'Schema Separation', type: 'COMPONENT', description: 'Tenant-scoped schema or database strategy' },
+            ],
+          },
+          { id: 'ts-db', label: 'Tenant Database', type: 'DATABASE', description: 'Tenants, memberships, settings, quotas' },
+          { id: 'ts-config', label: 'Tenant Config Store', type: 'DATABASE', description: 'Feature flags, branding, custom fields' },
+        ],
       },
       {
-        id: 'billing-screen',
-        type: 'SCREEN',
-        position: { x: 50, y: 550 },
-        data: {
-          label: 'Billing & Plans',
-          type: 'SCREEN',
-          description: 'Subscription management',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
-      },
-
-      // Core services
-      {
-        id: 'tenant-service',
-        type: 'SERVICE',
-        position: { x: 350, y: 150 },
-        data: {
-          label: 'Tenant Service',
-          type: 'SERVICE',
-          description: 'Multi-tenant data isolation',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
+        id: 'billing-service', label: 'Billing Service', type: 'SERVICE', x: 380, y: 320,
+        description: 'Subscription and payment management',
+        children: [
+          { id: 'bs-sub-mgr', label: 'Subscription Manager', type: 'SERVICE', description: 'Plan changes, trials, cancellation, reactivation' },
+          { id: 'bs-invoices', label: 'Invoice Generator', type: 'SERVICE', description: 'Monthly invoices with line items and tax' },
+          {
+            id: 'bs-payment-gw', label: 'Payment Gateway', type: 'INTEGRATION',
+            description: 'Payment processing integration',
+            children: [
+              { id: 'bs-stripe', label: 'Stripe Integration', type: 'INTEGRATION', description: 'Stripe Billing API with webhook handling' },
+              { id: 'bs-metering', label: 'Usage Metering', type: 'SERVICE', description: 'Track API calls, storage, seats for billing' },
+            ],
+          },
+          { id: 'bs-db', label: 'Billing Database', type: 'DATABASE', description: 'Subscriptions, invoices, payments, credits' },
+        ],
       },
       {
-        id: 'subscription-service',
-        type: 'SERVICE',
-        position: { x: 350, y: 300 },
-        data: {
-          label: 'Subscription Service',
-          type: 'SERVICE',
-          description: 'Billing & plan management',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
+        id: 'team-management', label: 'Team Management', type: 'SCREEN', x: 680, y: 60,
+        description: 'Workspace member administration',
+        children: [
+          { id: 'tm-invite', label: 'Member Invite', type: 'COMPONENT', description: 'Email invite with role selection and link sharing' },
+          { id: 'tm-roles', label: 'Role Assignment', type: 'COMPONENT', description: 'Owner, Admin, Member, Viewer role management' },
+          { id: 'tm-access', label: 'Access Control', type: 'SERVICE', description: 'Permission checks, resource-level authorization' },
+        ],
       },
       {
-        id: 'notification-service',
-        type: 'SERVICE',
-        position: { x: 350, y: 450 },
-        data: {
-          label: 'Notification Service',
-          type: 'SERVICE',
-          description: 'Email & in-app notifications',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
+        id: 'notification-service', label: 'Notification Service', type: 'SERVICE', x: 680, y: 320,
+        description: 'Multi-channel notification delivery',
+        children: [
+          { id: 'ns-email', label: 'Email Sender', type: 'SERVICE', description: 'Templated transactional emails via SendGrid/SES' },
+          { id: 'ns-in-app', label: 'In-App Notifications', type: 'SERVICE', description: 'Real-time notification bell with WebSocket push' },
+          { id: 'ns-webhooks', label: 'Webhook Dispatcher', type: 'SERVICE', description: 'Outbound webhooks with retry and signing' },
+          { id: 'ns-email-provider', label: 'Email Provider', type: 'INTEGRATION', description: 'SendGrid / AWS SES API integration' },
+        ],
       },
-
-      // Storage
-      {
-        id: 'tenant-db',
-        type: 'DATABASE',
-        position: { x: 650, y: 100 },
-        data: {
-          label: 'Tenant Database',
-          type: 'DATABASE',
-          description: 'Multi-tenant data store',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
-      },
-      {
-        id: 'billing-db',
-        type: 'DATABASE',
-        position: { x: 650, y: 250 },
-        data: {
-          label: 'Billing Database',
-          type: 'DATABASE',
-          description: 'Subscription & payment data',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
-      },
-
-      // Integrations
-      {
-        id: 'payment-gateway',
-        type: 'INTEGRATION',
-        position: { x: 650, y: 400 },
-        data: {
-          label: 'Payment Gateway',
-          type: 'INTEGRATION',
-          description: 'Stripe subscription billing',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
-      },
-      {
-        id: 'email-platform',
-        type: 'INTEGRATION',
-        position: { x: 650, y: 550 },
-        data: {
-          label: 'Email Platform',
-          type: 'INTEGRATION',
-          description: 'Transactional emails',
-          readiness: { requirements: 0, design: 0, frontend: 0, backend: 0, integration: 0, test: 0 }
-        }
-      }
     ],
     edges: [
-      { id: 'e1', source: 'landing-page', target: 'tenant-service', animated: true },
-      { id: 'e2', source: 'app-dashboard', target: 'tenant-service', animated: true },
-      { id: 'e3', source: 'team-management', target: 'tenant-service', animated: true },
-      { id: 'e4', source: 'billing-screen', target: 'subscription-service', animated: true },
-      { id: 'e5', source: 'tenant-service', target: 'tenant-db' },
-      { id: 'e6', source: 'subscription-service', target: 'billing-db' },
-      { id: 'e7', source: 'subscription-service', target: 'payment-gateway' },
-      { id: 'e8', source: 'notification-service', target: 'email-platform' },
-      { id: 'e9', source: 'tenant-service', target: 'notification-service', style: { strokeDasharray: '5 5' } }
-    ]
-  }
+      { id: 'e1', source: 'landing-page', target: 'tenant-service' },
+      { id: 'e2', source: 'app-dashboard', target: 'tenant-service' },
+      { id: 'e3', source: 'team-management', target: 'tenant-service' },
+      { id: 'e4', source: 'tenant-service', target: 'billing-service' },
+      { id: 'e5', source: 'billing-service', target: 'notification-service' },
+      { id: 'e6', source: 'team-management', target: 'notification-service' },
+    ],
+  },
 ];
 
 export const TEMPLATE_CATEGORIES = {
@@ -721,5 +511,5 @@ export const TEMPLATE_CATEGORIES = {
   dashboard: { name: 'Analytics & Dashboards', icon: '📊', color: '#f59e0b' },
   social: { name: 'Social Media', icon: '👥', color: '#ec4899' },
   fintech: { name: 'Financial', icon: '💳', color: '#06b6d4' },
-  saas: { name: 'SaaS Platform', icon: '🚀', color: '#ef4444' }
+  saas: { name: 'SaaS Platform', icon: '🚀', color: '#ef4444' },
 };

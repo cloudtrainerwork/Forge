@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { WORKFLOW_TEMPLATES, TEMPLATE_CATEGORIES } from '../data/workflowTemplates';
+import { WORKFLOW_TEMPLATES, TEMPLATE_CATEGORIES, flattenTemplate } from '../data/workflowTemplates';
 
 const C = {
   bg: "#08090d",
@@ -196,45 +196,30 @@ export default function TemplateSelector({ onSelectTemplate, onClose, isOpen }: 
                   {/* Stats */}
                   <div className="flex items-center justify-between text-xs">
                     <div style={{ color: C.textDim }}>
-                      {template.nodes.length} components • {template.edges.length} connections
+                      {flattenTemplate(template).length} components • {template.edges.length} connections
                     </div>
                     <div style={{ color: C.textDim }}>
                       {template.estimatedTimeframe}
                     </div>
                   </div>
 
-                  {/* Progress indicators */}
-                  <div className="mt-4 flex gap-1">
-                    {template.nodes.slice(0, 8).map((node, i) => {
-                      const avgReadiness = node.data.readiness
-                        ? Math.round(Object.values(node.data.readiness).reduce((a, b) => a + b, 0) / 6)
-                        : 0;
-                      return (
-                        <div
-                          key={i}
-                          className="w-3 h-3 rounded-sm"
-                          style={{
-                            backgroundColor: avgReadiness >= 60 ? '#22c55e' : avgReadiness >= 30 ? '#f59e0b' : '#ef4444',
-                            opacity: 0.6,
-                          }}
-                          title={`${node.data.label}: ${avgReadiness}%`}
-                        />
-                      );
-                    })}
-                    {template.nodes.length > 8 && (
+                  {/* Root node preview */}
+                  <div className="mt-4 flex gap-1 flex-wrap">
+                    {template.rootNodes.slice(0, 8).map((node, i) => (
                       <div
-                        className="flex items-center justify-center text-xs font-medium"
+                        key={i}
+                        className="px-1.5 py-0.5 rounded text-xs"
                         style={{
                           background: C.bg,
-                          color: C.textDim,
-                          width: 12,
-                          height: 12,
-                          fontSize: 8,
+                          color: C.textMuted,
+                          border: `1px solid ${C.border}`,
+                          fontSize: 9,
                         }}
+                        title={node.description || node.label}
                       >
-                        +{template.nodes.length - 8}
+                        {node.label}
                       </div>
-                    )}
+                    ))}
                   </div>
                 </div>
               );
