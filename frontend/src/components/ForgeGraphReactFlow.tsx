@@ -1310,7 +1310,6 @@ function ForgeGraphFlow({ projectId }: { projectId?: string }) {
         onClose={() => setShowProjectNav(false)}
       />
     </div>
-    </div>
     {/* Release Panel Sidebar */}
     {projectId && releasePanelOpen && (
       <ReleasePanel
