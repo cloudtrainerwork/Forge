@@ -1312,10 +1312,7 @@ function ForgeGraphFlow({ projectId }: { projectId?: string }) {
     </div>
     {/* Release Panel Sidebar */}
     {projectId && releasePanelOpen && (
-      <ReleasePanel
-        projectId={projectId}
-        nodeIds={nodes.map(n => n.id)}
-      />
+      <ReleasePanel projectId={projectId} />
     )}
     </div>
     </div>
