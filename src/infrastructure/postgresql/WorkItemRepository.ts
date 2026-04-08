@@ -27,6 +27,8 @@ export class WorkItemRepository implements IWorkItemRepository {
         implementationStatus: workItem.implementationStatus || 'NOT_STARTED',
         deliverableType: workItem.deliverableType || null,
         parentId: workItem.parentId || null,
+        releaseId: workItem.releaseId || null,
+        onTheBubble: workItem.onTheBubble || false,
       };
 
       // Include tenantId for new records (required column with RLS)
@@ -410,7 +412,7 @@ export class WorkItemRepository implements IWorkItemRepository {
    * Map Prisma model to domain entity
    */
   private mapToWorkItem(item: any): WorkItem {
-    return new WorkItem(
+    const wi = new WorkItem(
       item.id,
       item.spec as Record<string, any>,
       item.title || undefined,
@@ -425,5 +427,8 @@ export class WorkItemRepository implements IWorkItemRepository {
       item.tenantId || undefined,
       (item.implementationStatus as any) || undefined,
     );
+    wi.releaseId = item.releaseId || undefined;
+    wi.onTheBubble = item.onTheBubble || false;
+    return wi;
   }
 }

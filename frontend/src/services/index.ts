@@ -21,6 +21,7 @@ export * as WorkItemService from './WorkItemService';
 export * as DependencyService from './DependencyService';
 export * as SpecificationService from './SpecificationService';
 export * as ProjectService from './ProjectService';
+export * as ReleaseService from './ReleaseService';
 
 // Re-export commonly used types
 export type { ApiError, NetworkError, NotFoundError, ValidationError, ServerError, UnauthorizedError } from './ApiClient';
@@ -28,3 +29,4 @@ export type { WorkItemDTO, ReadinessState } from './WorkItemService';
 export type { DependencyDTO } from './DependencyService';
 export type { SpecData, SpecSection, SectionName, NodeReadiness } from './SpecificationService';
 export type { Project, ProjectMember } from './ProjectService';
+export type { ReleaseDTO, ReleaseSummaryDTO } from './ReleaseService';

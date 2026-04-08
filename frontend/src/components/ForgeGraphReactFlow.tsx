@@ -26,6 +26,8 @@ import { useCanvasStore } from '@/stores/canvasStore';
 import TemplateSelector from './TemplateSelector';
 import ProjectNavigator from './ProjectNavigator';
 import { SpecificationEditor } from './specifications/SpecificationEditor';
+import ReleasePanel from './ReleasePanel';
+import { useReleaseStore } from '@/stores/releaseStore';
 import { WORKFLOW_TEMPLATES, flattenTemplate } from '@/data/workflowTemplates';
 
 // ── Services ───────────────────────────────────────────────────────────────────
@@ -303,7 +305,9 @@ function ForgeNode({
         fontSize: 12,
         fontFamily: 'system-ui, -apple-system, sans-serif',
         position: 'relative',
-        boxShadow: selected ? `0 0 12px ${C.accent}40, 0 0 4px ${C.accent}20` : 'none',
+        boxShadow: (data as any).onTheBubble
+          ? `0 0 0 2px ${C.red}, 0 0 12px ${C.red}40`
+          : selected ? `0 0 12px ${C.accent}40, 0 0 4px ${C.accent}20` : 'none',
         transition: 'border-color 0.15s, background 0.15s, box-shadow 0.15s',
       }}
     >
@@ -460,6 +464,8 @@ const createNodeTypes = (
 // ── Main graph component ───────────────────────────────────────────────────────
 function ForgeGraphFlow({ projectId }: { projectId?: string }) {
   const routeParams = useParams();
+  const releasePanelOpen = useReleaseStore(s => s.panelOpen);
+  const toggleReleasePanel = useReleaseStore(s => s.togglePanel);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [loading, setLoading] = useState(true);
@@ -618,6 +624,8 @@ function ForgeGraphFlow({ projectId }: { projectId?: string }) {
         confidence: item.confidence || 'DEFERRED',
         implementationStatus: item.implementationStatus || 'NOT_STARTED',
         childCount: item.childCount ?? 0,
+        onTheBubble: item.onTheBubble ?? false,
+        releaseId: item.releaseId ?? null,
       },
       draggable: true,
     }));
@@ -1119,6 +1127,7 @@ function ForgeGraphFlow({ projectId }: { projectId?: string }) {
           </button>
         </div>
       )}
+      <div className="flex-1 flex relative">
       <div className="flex-1 relative">
       <ReactFlow
         nodes={nodes}
@@ -1159,6 +1168,20 @@ function ForgeGraphFlow({ projectId }: { projectId?: string }) {
         >
           + Add Node
         </button>
+
+        {projectId && (
+          <button
+            onClick={toggleReleasePanel}
+            className="px-3 py-2 rounded-lg text-xs font-medium transition-all hover:scale-[1.02] shadow-lg"
+            style={{
+              background: releasePanelOpen ? C.accent : C.surface,
+              color: releasePanelOpen ? 'white' : C.blue,
+              border: `1px solid ${releasePanelOpen ? C.accent : C.border}`,
+            }}
+          >
+            Releases
+          </button>
+        )}
 
         {/* Legacy project nav (when no projectId) */}
         {!projectId && (
@@ -1286,6 +1309,15 @@ function ForgeGraphFlow({ projectId }: { projectId?: string }) {
         isOpen={showProjectNav}
         onClose={() => setShowProjectNav(false)}
       />
+    </div>
+    </div>
+    {/* Release Panel Sidebar */}
+    {projectId && releasePanelOpen && (
+      <ReleasePanel
+        projectId={projectId}
+        nodeIds={nodes.map(n => n.id)}
+      />
+    )}
     </div>
     </div>
   );

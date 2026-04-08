@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsObject, IsNotEmpty, IsEnum, validateOrReject } from 'class-validator';
+import { IsString, IsOptional, IsObject, IsNotEmpty, IsEnum, IsBoolean, validateOrReject } from 'class-validator';
 import { Expose, Transform, Type } from 'class-transformer';
 import { ReadinessState, ReadinessDimension, ReadinessDimensionKey } from './ReadinessState.js';
 
@@ -86,6 +86,16 @@ export class WorkItem {
   @Expose()
   deliverableType?: DeliverableType; // Type of deliverable this work item represents
 
+  @IsString()
+  @IsOptional()
+  @Expose()
+  releaseId?: string; // Assigned release for release planning
+
+  @IsBoolean()
+  @IsOptional()
+  @Expose()
+  onTheBubble: boolean; // At-risk flag for release scope
+
   @IsEnum(ImplementationStatus)
   @IsOptional()
   @Expose()
@@ -124,6 +134,8 @@ export class WorkItem {
     this.sprintId = sprintId;
     this.parentId = parentId;
     this.deliverableType = deliverableType;
+    this.releaseId = undefined;
+    this.onTheBubble = false;
     this.implementationStatus = implementationStatus || ImplementationStatus.NOT_STARTED;
     this.createdAt = createdAt || new Date();
     this.updatedAt = updatedAt || new Date();
@@ -330,6 +342,8 @@ export class WorkItem {
       groupId: this.groupId,
       sprintId: this.sprintId,
       parentId: this.parentId || null,
+      releaseId: this.releaseId || null,
+      onTheBubble: this.onTheBubble || false,
       deliverableType: this.deliverableType,
       implementationStatus: this.implementationStatus,
       createdAt: this.createdAt.toISOString(),

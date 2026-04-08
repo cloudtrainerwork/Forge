@@ -35,6 +35,7 @@ model Tenant {
   memberships             TenantMembership[]
   projects                Project[]
   workItems               WorkItem[]
+  releases                Release[]
   readinessConfigurations ReadinessConfiguration[]
   auditLogs               AuditLog[]
 
@@ -124,21 +125,49 @@ model WorkItem {
   implementationStatus     String                   @default("NOT_STARTED") @map("implementation_status") // NOT_STARTED | STUBBED | PARTIAL | FUNCTIONAL | PRODUCTION
   deliverableType          String?                  @map("deliverable_type") // FEATURE | SERVICE | SCREEN | INTEGRATION | DATABASE | API | COMPONENT | DTO | TEST | CONFIG | DOCUMENT | VIEWMODEL | MANAGER | GENERIC
   parentId                 String?                  @map("parent_id") // Self-referencing for hierarchical node nesting
+  releaseId                String?                  @map("release_id") // Assigned release for release planning
+  onTheBubble              Boolean                  @default(false) @map("on_the_bubble") // At-risk flag for release scope
   readinessConfigurationId String?                  @map("readiness_configuration_id")
   readinessConfiguration   ReadinessConfiguration?  @relation(fields: [readinessConfigurationId], references: [id])
   createdAt                DateTime                 @default(now()) @map("created_at")
   updatedAt                DateTime                 @updatedAt @map("updated_at")
 
-  tenant  Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  project Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  parent  WorkItem? @relation("WorkItemHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project  Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  parent   WorkItem? @relation("WorkItemHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
   children WorkItem[] @relation("WorkItemHierarchy")
+  release  Release?  @relation(fields: [releaseId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, createdAt(sort: Desc)])
   @@index([tenantId, id])
   @@index([projectId])
   @@index([parentId])
+  @@index([releaseId])
   @@map("work_items")
+}
+
+// ── Releases (project-scoped) ─────────────────────────────────────────────────
+
+model Release {
+  id         String    @id @default(cuid())
+  tenantId   String    @map("tenant_id")
+  projectId  String    @map("project_id")
+  version    String
+  name       String
+  targetDate DateTime? @map("target_date")
+  status     String    @default("PLANNING") // PLANNING | IN_PROGRESS | RELEASED | CANCELLED
+  isFuture   Boolean   @default(false) @map("is_future")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workItems WorkItem[]
+
+  @@unique([projectId, version])
+  @@index([tenantId, projectId])
+  @@index([projectId, status])
+  @@map("releases")
 }
 
 // ── Readiness configurations (tenant-scoped) ──────────────────────────────────
@@ -193,6 +222,10 @@ enum AuditLogType {
   PROJECT_CREATED
   PROJECT_UPDATED
   PROJECT_ARCHIVED
+  RELEASE_CREATED
+  RELEASE_UPDATED
+  RELEASE_STATUS_CHANGED
+  WORK_ITEM_RELEASE_CHANGED
   PROJECT_MEMBER_ADDED
   PROJECT_MEMBER_REMOVED
   PROJECT_MEMBER_ROLE_UPDATED
@@ -214,6 +247,7 @@ model Project {
   createdBy User                @relation("ProjectCreator", fields: [createdById], references: [id])
   members   ProjectMembership[]
   workItems WorkItem[]
+  releases  Release[]
 
   @@unique([tenantId, name])
   @@index([tenantId, createdAt(sort: Desc)])

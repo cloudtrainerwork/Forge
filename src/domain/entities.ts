@@ -2,3 +2,4 @@
 export { WorkItem, DeliverableType, ImplementationStatus } from './entities/WorkItem.js';
 export { ReadinessState, ReadinessDimension } from './entities/ReadinessState.js';
 export type { ReadinessDimensionKey } from './entities/ReadinessState.js';
+export { Release, ReleaseStatus } from './entities/Release.js';

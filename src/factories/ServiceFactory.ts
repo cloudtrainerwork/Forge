@@ -17,10 +17,13 @@ import { SprintService } from '../services/SprintService.js';
 import { SpecificationService } from '../services/SpecificationService.js';
 import { ExportService } from '../services/ExportService.js';
 import { GSDXmlGenerator } from '../services/GSDXmlGenerator.js';
+import { ReleaseService } from '../services/ReleaseService.js';
+import { ReleaseRepository } from '../infrastructure/postgresql/ReleaseRepository.js';
 import { JwtService } from '../auth/JwtService.js';
 import type { IWorkItemRepository } from '../adapters/IWorkItemRepository.js';
 import type { IAuthRepository } from '../adapters/IAuthRepository.js';
 import type { IProjectRepository } from '../adapters/IProjectRepository.js';
+import type { IReleaseRepository } from '../adapters/IReleaseRepository.js';
 import type { IGraphRepository } from '../adapters/IGraphRepository.js';
 import type { ISpecificationService } from '../adapters/ISpecificationService.js';
 import type { IExportService } from '../adapters/IExportService.js';
@@ -97,6 +100,18 @@ export class ServiceFactory {
 
     this.container.bind<ProjectService>('ProjectService')
       .to(ProjectService)
+      .inSingletonScope();
+
+    // Release planning
+    this.container.bind<IReleaseRepository>('IReleaseRepository')
+      .toDynamicValue((context) => {
+        const prisma = context.container.get<PrismaClient>('PrismaClient');
+        return new ReleaseRepository(prisma);
+      })
+      .inSingletonScope();
+
+    this.container.bind<ReleaseService>('ReleaseService')
+      .to(ReleaseService)
       .inSingletonScope();
 
     this.container.bind<PermissionService>('PermissionService')

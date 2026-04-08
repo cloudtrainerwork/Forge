@@ -32,6 +32,8 @@ export interface WorkItemDTO {
   implementationStatus: string; // NOT_STARTED | STUBBED | PARTIAL | FUNCTIONAL | PRODUCTION
   parentId?: string | null;
   childCount?: number;
+  releaseId?: string | null;
+  onTheBubble?: boolean;
 }
 
 export interface WorkItemListResponse {
