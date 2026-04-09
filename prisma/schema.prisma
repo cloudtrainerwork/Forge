@@ -128,6 +128,8 @@ model WorkItem {
   parentId                 String?                  @map("parent_id") // Self-referencing for hierarchical node nesting
   releaseId                String?                  @map("release_id") // Assigned release for release planning
   sprintId                 String?                  @map("sprint_id") // Assigned sprint for execution tracking
+  estimatedHours           Float?                   @map("estimated_hours") // Effort estimate in hours
+  actualHours              Float?                   @map("actual_hours") // Actual effort logged
   onTheBubble              Boolean                  @default(false) @map("on_the_bubble") // At-risk flag for release scope
   readinessConfigurationId String?                  @map("readiness_configuration_id")
   readinessConfiguration   ReadinessConfiguration?  @relation(fields: [readinessConfigurationId], references: [id])

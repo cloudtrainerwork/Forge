@@ -29,6 +29,8 @@ export class WorkItemRepository implements IWorkItemRepository {
         parentId: workItem.parentId || null,
         releaseId: workItem.releaseId || null,
         sprintId: workItem.sprintId || null,
+        estimatedHours: workItem.estimatedHours ?? null,
+        actualHours: workItem.actualHours ?? null,
         onTheBubble: workItem.onTheBubble || false,
       };
 
@@ -237,6 +239,12 @@ export class WorkItemRepository implements IWorkItemRepository {
         existing.tenantId,
         updates.implementationStatus ?? existing.implementationStatus,
       );
+      // Preserve fields not in constructor
+      updated.releaseId = updates.releaseId !== undefined ? updates.releaseId : existing.releaseId;
+      updated.sprintId = updates.sprintId !== undefined ? updates.sprintId : existing.sprintId;
+      updated.estimatedHours = updates.estimatedHours !== undefined ? updates.estimatedHours : existing.estimatedHours;
+      updated.actualHours = updates.actualHours !== undefined ? updates.actualHours : existing.actualHours;
+      updated.onTheBubble = updates.onTheBubble !== undefined ? updates.onTheBubble : existing.onTheBubble;
 
       return await this.save(updated);
     } catch (error) {
@@ -430,6 +438,8 @@ export class WorkItemRepository implements IWorkItemRepository {
     );
     wi.releaseId = item.releaseId || undefined;
     wi.sprintId = item.sprintId || undefined;
+    wi.estimatedHours = item.estimatedHours ?? undefined;
+    wi.actualHours = item.actualHours ?? undefined;
     wi.onTheBubble = item.onTheBubble || false;
     return wi;
   }

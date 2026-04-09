@@ -34,6 +34,8 @@ export interface WorkItemDTO {
   childCount?: number;
   releaseId?: string | null;
   sprintId?: string | null;
+  estimatedHours?: number | null;
+  actualHours?: number | null;
   onTheBubble?: boolean;
 }
 
@@ -97,7 +99,7 @@ export async function updatePosition(id: string, x: number, y: number): Promise<
 }
 
 /** Update a work item's title, description, type, or implementationStatus */
-export async function update(id: string, data: { title?: string; description?: string; type?: string; implementationStatus?: string }): Promise<WorkItemDTO | null> {
+export async function update(id: string, data: { title?: string; description?: string; type?: string; implementationStatus?: string; estimatedHours?: number | null; actualHours?: number | null }): Promise<WorkItemDTO | null> {
   try {
     const res = await api.put<{ data: WorkItemDTO }>(`/work-items/${id}`, data);
     return res.data ?? null;

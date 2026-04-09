@@ -18,11 +18,19 @@ export class SprintRepository implements ISprintRepository {
     });
     const results: SprintWithStats[] = [];
     for (const s of sprints) {
-      const [workItemCount, completedCount] = await Promise.all([
+      const [workItemCount, completedCount, hoursAgg] = await Promise.all([
         (this.prisma as any).workItem.count({ where: { sprintId: s.id } }),
         (this.prisma as any).workItem.count({ where: { sprintId: s.id, implementationStatus: 'PRODUCTION' } }),
+        (this.prisma as any).workItem.aggregate({
+          where: { sprintId: s.id },
+          _sum: { estimatedHours: true, actualHours: true },
+        }),
       ]);
-      results.push({ ...this.toRecord(s), workItemCount, completedCount });
+      results.push({
+        ...this.toRecord(s), workItemCount, completedCount,
+        totalEstimatedHours: hoursAgg._sum.estimatedHours ?? 0,
+        totalActualHours: hoursAgg._sum.actualHours ?? 0,
+      });
     }
     return results;
   }

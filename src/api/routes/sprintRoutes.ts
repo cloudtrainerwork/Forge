@@ -128,5 +128,33 @@ export default function sprintRoutes(serviceFactory: ServiceFactory): Router {
     } catch (error) { next(error); }
   });
 
+  // GET /projects/:projectId/sprints/:sprintId/hours — Sprint hours aggregation (HR-02)
+  router.get('/:sprintId/hours', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const items = await getRepo().getWorkItemsBySprint(req.params.sprintId);
+      // Need full items with hours — query via prisma directly
+      const prisma = serviceFactory.getService<any>('PrismaClient');
+      const fullItems = await prisma.workItem.findMany({
+        where: { sprintId: req.params.sprintId },
+        select: { estimatedHours: true, actualHours: true },
+      });
+
+      const totalEstimated = fullItems.reduce((sum: number, i: any) => sum + (i.estimatedHours ?? 0), 0);
+      const totalActual = fullItems.reduce((sum: number, i: any) => sum + (i.actualHours ?? 0), 0);
+      const variance = totalActual - totalEstimated;
+
+      res.json({
+        data: {
+          totalEstimated,
+          totalActual,
+          variance,
+          isOverBudget: variance > 0,
+          itemCount: fullItems.length,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) { next(error); }
+  });
+
   return router;
 }

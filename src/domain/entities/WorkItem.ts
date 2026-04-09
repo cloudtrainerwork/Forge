@@ -91,6 +91,14 @@ export class WorkItem {
   @Expose()
   releaseId?: string; // Assigned release for release planning
 
+  @IsOptional()
+  @Expose()
+  estimatedHours?: number; // Effort estimate in hours
+
+  @IsOptional()
+  @Expose()
+  actualHours?: number; // Actual effort logged
+
   @IsBoolean()
   @IsOptional()
   @Expose()
@@ -344,6 +352,8 @@ export class WorkItem {
       parentId: this.parentId || null,
       releaseId: this.releaseId || null,
       sprintId: this.sprintId || null,
+      estimatedHours: this.estimatedHours ?? null,
+      actualHours: this.actualHours ?? null,
       onTheBubble: this.onTheBubble || false,
       deliverableType: this.deliverableType,
       implementationStatus: this.implementationStatus,

@@ -628,6 +628,8 @@ function ForgeGraphFlow({ projectId }: { projectId?: string }) {
         confidence: item.confidence || 'DEFERRED',
         implementationStatus: item.implementationStatus || 'NOT_STARTED',
         childCount: item.childCount ?? 0,
+        estimatedHours: item.estimatedHours ?? null,
+        actualHours: item.actualHours ?? null,
         onTheBubble: item.onTheBubble ?? false,
         releaseId: item.releaseId ?? null,
       },
@@ -1244,6 +1246,56 @@ function ForgeGraphFlow({ projectId }: { projectId?: string }) {
           {selectedNode.description && (
             <p className="text-xs mb-4" style={{ color: C.textMuted }}>{selectedNode.description}</p>
           )}
+
+          {/* Hours (HR-01, HR-03) */}
+          <div className="mb-4" style={{ borderBottom: `1px solid ${C.border}`, paddingBottom: 12 }}>
+            <h4 className="text-xs font-medium mb-2" style={{ color: C.text }}>Effort Tracking</h4>
+            <div className="flex gap-3">
+              <div style={{ flex: 1 }}>
+                <label className="text-xs" style={{ color: C.textDim, display: 'block', marginBottom: 2 }}>Estimated</label>
+                <input
+                  type="number" step="0.5" min="0"
+                  defaultValue={(selectedNode as any).estimatedHours ?? ''}
+                  placeholder="hrs"
+                  onBlur={(e) => {
+                    const val = e.target.value ? parseFloat(e.target.value) : null;
+                    WorkItemService.update(selectedNode.id, { estimatedHours: val });
+                  }}
+                  style={{
+                    width: '100%', padding: '4px 8px', borderRadius: 4, fontSize: 12,
+                    background: C.surfaceAlt, color: C.text, border: `1px solid ${C.border}`,
+                  }}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label className="text-xs" style={{ color: C.textDim, display: 'block', marginBottom: 2 }}>Actual</label>
+                <input
+                  type="number" step="0.5" min="0"
+                  defaultValue={(selectedNode as any).actualHours ?? ''}
+                  placeholder="hrs"
+                  onBlur={(e) => {
+                    const val = e.target.value ? parseFloat(e.target.value) : null;
+                    WorkItemService.update(selectedNode.id, { actualHours: val });
+                  }}
+                  style={{
+                    width: '100%', padding: '4px 8px', borderRadius: 4, fontSize: 12,
+                    background: C.surfaceAlt, color: C.text, border: `1px solid ${C.border}`,
+                  }}
+                />
+              </div>
+            </div>
+            {(selectedNode as any).estimatedHours != null && (selectedNode as any).actualHours != null && (
+              <div className="mt-2 text-xs" style={{
+                color: ((selectedNode as any).actualHours ?? 0) > ((selectedNode as any).estimatedHours ?? 0) ? C.red : C.green,
+                fontWeight: 600,
+              }}>
+                {((selectedNode as any).actualHours ?? 0) <= ((selectedNode as any).estimatedHours ?? 0)
+                  ? `✓ ${((selectedNode as any).estimatedHours - (selectedNode as any).actualHours).toFixed(1)}h under budget`
+                  : `⚠ ${((selectedNode as any).actualHours - (selectedNode as any).estimatedHours).toFixed(1)}h over budget`
+                }
+              </div>
+            )}
+          </div>
 
           {/* Implementation Status (Harvey Ball) */}
           <div className="flex items-center gap-2 mb-4">

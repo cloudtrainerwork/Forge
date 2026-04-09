@@ -17,6 +17,8 @@ export interface SprintDTO {
   capacity: number | null;
   workItemCount: number;
   completedCount: number;
+  totalEstimatedHours: number;
+  totalActualHours: number;
 }
 
 export async function list(projectId: string): Promise<SprintDTO[]> {

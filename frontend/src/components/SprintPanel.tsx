@@ -234,7 +234,11 @@ export default function SprintPanel({ projectId }: SprintPanelProps) {
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: C.textDim, marginTop: 4 }}>
               <span>{sprint.workItemCount} items</span>
-              {sprint.goal && <span style={{ color: C.textMuted, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sprint.goal}</span>}
+              {(sprint.totalEstimatedHours > 0 || sprint.totalActualHours > 0) && (
+                <span style={{ color: sprint.totalActualHours > sprint.totalEstimatedHours ? C.red : C.green }}>
+                  {sprint.totalActualHours.toFixed(0)}/{sprint.totalEstimatedHours.toFixed(0)}h
+                </span>
+              )}
             </div>
             {sprint.workItemCount > 0 && (
               <div style={{ marginTop: 4, height: 3, borderRadius: 2, background: C.bg }}>

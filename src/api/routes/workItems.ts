@@ -205,6 +205,40 @@ export function workItemRoutes(serviceFactory: ServiceFactory): Router {
   });
 
   /**
+   * GET /work-items/:id/hours-rollup - Get aggregated hours including children (HR-07)
+   */
+  router.get('/:id/hours-rollup', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const workItemService = serviceFactory.getService<WorkItemService>('WorkItemService');
+      const { id } = req.params;
+
+      const item = await workItemService.getWorkItem(id);
+      if (!item) return res.status(404).json({ error: 'Not found' });
+
+      // Get children hours
+      const children = await workItemService.listWorkItems({ parentId: id });
+      let childEstimated = 0, childActual = 0;
+      for (const child of children.items) {
+        childEstimated += child.estimatedHours ?? 0;
+        childActual += child.actualHours ?? 0;
+      }
+
+      res.json({
+        data: {
+          ownEstimated: item.estimatedHours ?? 0,
+          ownActual: item.actualHours ?? 0,
+          childEstimated,
+          childActual,
+          totalEstimated: (item.estimatedHours ?? 0) + childEstimated,
+          totalActual: (item.actualHours ?? 0) + childActual,
+          childCount: children.items.length,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) { next(error); }
+  });
+
+  /**
    * GET /work-items/:id - Get work item by ID
    */
   router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
@@ -247,7 +281,7 @@ export function workItemRoutes(serviceFactory: ServiceFactory): Router {
     try {
       const workItemService = serviceFactory.getService<WorkItemService>('WorkItemService');
       const { id } = req.params;
-      const { title, description, implementationStatus, type: deliverableType } = req.body;
+      const { title, description, implementationStatus, type: deliverableType, estimatedHours, actualHours } = req.body;
 
       if (!id || typeof id !== 'string') {
         return res.status(400).json({
@@ -284,6 +318,8 @@ export function workItemRoutes(serviceFactory: ServiceFactory): Router {
       if (description !== undefined) updates.description = description.trim();
       if (implementationStatus !== undefined) updates.implementationStatus = implementationStatus;
       if (deliverableType !== undefined) updates.deliverableType = deliverableType.toLowerCase();
+      if (estimatedHours !== undefined) updates.estimatedHours = estimatedHours === null ? null : Number(estimatedHours);
+      if (actualHours !== undefined) updates.actualHours = actualHours === null ? null : Number(actualHours);
 
       // Persist via repository
       const workItemRepository = serviceFactory.getService<any>('IWorkItemRepository');

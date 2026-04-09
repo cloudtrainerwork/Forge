@@ -19,6 +19,8 @@ export interface SprintRecord {
 export interface SprintWithStats extends SprintRecord {
   workItemCount: number;
   completedCount: number;
+  totalEstimatedHours: number;
+  totalActualHours: number;
 }
 
 export interface ISprintRepository {
