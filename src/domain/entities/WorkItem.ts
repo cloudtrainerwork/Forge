@@ -343,6 +343,7 @@ export class WorkItem {
       sprintId: this.sprintId,
       parentId: this.parentId || null,
       releaseId: this.releaseId || null,
+      sprintId: this.sprintId || null,
       onTheBubble: this.onTheBubble || false,
       deliverableType: this.deliverableType,
       implementationStatus: this.implementationStatus,

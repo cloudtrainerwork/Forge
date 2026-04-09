@@ -28,6 +28,7 @@ export class WorkItemRepository implements IWorkItemRepository {
         deliverableType: workItem.deliverableType || null,
         parentId: workItem.parentId || null,
         releaseId: workItem.releaseId || null,
+        sprintId: workItem.sprintId || null,
         onTheBubble: workItem.onTheBubble || false,
       };
 
@@ -428,6 +429,7 @@ export class WorkItemRepository implements IWorkItemRepository {
       (item.implementationStatus as any) || undefined,
     );
     wi.releaseId = item.releaseId || undefined;
+    wi.sprintId = item.sprintId || undefined;
     wi.onTheBubble = item.onTheBubble || false;
     return wi;
   }

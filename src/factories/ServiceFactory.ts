@@ -19,6 +19,8 @@ import { ExportService } from '../services/ExportService.js';
 import { GSDXmlGenerator } from '../services/GSDXmlGenerator.js';
 import { ReleaseService } from '../services/ReleaseService.js';
 import { ReleaseRepository } from '../infrastructure/postgresql/ReleaseRepository.js';
+import { SprintRepository } from '../infrastructure/postgresql/SprintRepository.js';
+import type { ISprintRepository } from '../adapters/ISprintRepository.js';
 import { JwtService } from '../auth/JwtService.js';
 import type { IWorkItemRepository } from '../adapters/IWorkItemRepository.js';
 import type { IAuthRepository } from '../adapters/IAuthRepository.js';
@@ -112,6 +114,14 @@ export class ServiceFactory {
 
     this.container.bind<ReleaseService>('ReleaseService')
       .to(ReleaseService)
+      .inSingletonScope();
+
+    // Sprint execution
+    this.container.bind<ISprintRepository>('ISprintRepository')
+      .toDynamicValue((context) => {
+        const prisma = context.container.get<PrismaClient>('PrismaClient');
+        return new SprintRepository(prisma);
+      })
       .inSingletonScope();
 
     this.container.bind<PermissionService>('PermissionService')

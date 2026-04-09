@@ -27,7 +27,9 @@ import TemplateSelector from './TemplateSelector';
 import ProjectNavigator from './ProjectNavigator';
 import { SpecificationEditor } from './specifications/SpecificationEditor';
 import ReleasePanel from './ReleasePanel';
+import SprintPanel from './SprintPanel';
 import { useReleaseStore } from '@/stores/releaseStore';
+import { useSprintStore } from '@/stores/sprintStore';
 import { WORKFLOW_TEMPLATES, flattenTemplate } from '@/data/workflowTemplates';
 
 // ── Services ───────────────────────────────────────────────────────────────────
@@ -466,6 +468,8 @@ function ForgeGraphFlow({ projectId }: { projectId?: string }) {
   const routeParams = useParams();
   const releasePanelOpen = useReleaseStore(s => s.panelOpen);
   const toggleReleasePanel = useReleaseStore(s => s.togglePanel);
+  const sprintPanelOpen = useSprintStore(s => s.panelOpen);
+  const toggleSprintPanel = useSprintStore(s => s.togglePanel);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1183,6 +1187,20 @@ function ForgeGraphFlow({ projectId }: { projectId?: string }) {
           </button>
         )}
 
+        {projectId && (
+          <button
+            onClick={toggleSprintPanel}
+            className="px-3 py-2 rounded-lg text-xs font-medium transition-all hover:scale-[1.02] shadow-lg"
+            style={{
+              background: sprintPanelOpen ? C.green : C.surface,
+              color: sprintPanelOpen ? 'white' : C.green,
+              border: `1px solid ${sprintPanelOpen ? C.green : C.border}`,
+            }}
+          >
+            Sprints
+          </button>
+        )}
+
         {/* Legacy project nav (when no projectId) */}
         {!projectId && (
           <>
@@ -1313,6 +1331,9 @@ function ForgeGraphFlow({ projectId }: { projectId?: string }) {
     {/* Release Panel Sidebar */}
     {projectId && releasePanelOpen && (
       <ReleasePanel projectId={projectId} />
+    )}
+    {projectId && sprintPanelOpen && (
+      <SprintPanel projectId={projectId} />
     )}
     </div>
     </div>

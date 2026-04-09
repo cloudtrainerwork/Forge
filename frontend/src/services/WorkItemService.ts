@@ -33,6 +33,7 @@ export interface WorkItemDTO {
   parentId?: string | null;
   childCount?: number;
   releaseId?: string | null;
+  sprintId?: string | null;
   onTheBubble?: boolean;
 }
 

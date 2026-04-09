@@ -14,6 +14,7 @@ import projectRoutes from './routes/projects.js';
 import adminRoutes from './routes/admin.js';
 import dependencyRoutes from './routes/dependencies.js';
 import releaseRoutes from './routes/releases.js';
+import sprintDbRoutes from './routes/sprintRoutes.js';
 import { ServiceFactory } from '../factories/ServiceFactory.js';
 import { createAuthMiddleware } from '../middleware/authMiddleware.js';
 
@@ -117,6 +118,9 @@ export class ApiServer {
     // Release routes (nested under projects)
     tenantRouter.use('/projects/:projectId/releases', releaseRoutes(this.serviceFactory));
 
+    // Sprint routes (nested under projects, DB-backed)
+    tenantRouter.use('/projects/:projectId/sprints', sprintDbRoutes(this.serviceFactory));
+
     // Admin routes (tenant management)
     tenantRouter.use('/admin', adminRoutes(this.serviceFactory));
 
@@ -141,6 +145,7 @@ export class ApiServer {
     legacyRouter.use('/specifications', specificationsRoutes(this.serviceFactory));
     legacyRouter.use('/dependencies', dependencyRoutes(this.serviceFactory));
     legacyRouter.use('/projects/:projectId/releases', releaseRoutes(this.serviceFactory));
+    legacyRouter.use('/projects/:projectId/sprints', sprintDbRoutes(this.serviceFactory));
     legacyRouter.use('/projects', projectRoutes(this.serviceFactory));
     legacyRouter.use('/admin', adminRoutes(this.serviceFactory));
 

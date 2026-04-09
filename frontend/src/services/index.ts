@@ -22,6 +22,7 @@ export * as DependencyService from './DependencyService';
 export * as SpecificationService from './SpecificationService';
 export * as ProjectService from './ProjectService';
 export * as ReleaseService from './ReleaseService';
+export * as SprintService from './SprintService';
 
 // Re-export commonly used types
 export type { ApiError, NetworkError, NotFoundError, ValidationError, ServerError, UnauthorizedError } from './ApiClient';
@@ -30,3 +31,4 @@ export type { DependencyDTO } from './DependencyService';
 export type { SpecData, SpecSection, SectionName, NodeReadiness } from './SpecificationService';
 export type { Project, ProjectMember } from './ProjectService';
 export type { ReleaseDTO, ReleaseSummaryDTO } from './ReleaseService';
+export type { SprintDTO } from './SprintService';

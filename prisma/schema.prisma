@@ -36,6 +36,7 @@ model Tenant {
   projects                Project[]
   workItems               WorkItem[]
   releases                Release[]
+  sprints                 Sprint[]
   readinessConfigurations ReadinessConfiguration[]
   auditLogs               AuditLog[]
 
@@ -126,6 +127,7 @@ model WorkItem {
   deliverableType          String?                  @map("deliverable_type") // FEATURE | SERVICE | SCREEN | INTEGRATION | DATABASE | API | COMPONENT | DTO | TEST | CONFIG | DOCUMENT | VIEWMODEL | MANAGER | GENERIC
   parentId                 String?                  @map("parent_id") // Self-referencing for hierarchical node nesting
   releaseId                String?                  @map("release_id") // Assigned release for release planning
+  sprintId                 String?                  @map("sprint_id") // Assigned sprint for execution tracking
   onTheBubble              Boolean                  @default(false) @map("on_the_bubble") // At-risk flag for release scope
   readinessConfigurationId String?                  @map("readiness_configuration_id")
   readinessConfiguration   ReadinessConfiguration?  @relation(fields: [readinessConfigurationId], references: [id])
@@ -137,12 +139,14 @@ model WorkItem {
   parent   WorkItem? @relation("WorkItemHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
   children WorkItem[] @relation("WorkItemHierarchy")
   release  Release?  @relation(fields: [releaseId], references: [id], onDelete: SetNull)
+  sprint   Sprint?   @relation(fields: [sprintId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, createdAt(sort: Desc)])
   @@index([tenantId, id])
   @@index([projectId])
   @@index([parentId])
   @@index([releaseId])
+  @@index([sprintId])
   @@map("work_items")
 }
 
@@ -168,6 +172,35 @@ model Release {
   @@index([tenantId, projectId])
   @@index([projectId, status])
   @@map("releases")
+}
+
+// ── Sprints (project-scoped) ──────────────────────────────────────────────────
+
+model Sprint {
+  id              String    @id @default(cuid())
+  tenantId        String    @map("tenant_id")
+  projectId       String    @map("project_id")
+  number          Int
+  name            String
+  description     String?
+  startDate       DateTime  @map("start_date")
+  endDate         DateTime  @map("end_date")
+  status          String    @default("PLANNING") // PLANNING | ACTIVE | COMPLETE | CANCELLED
+  goal            String?
+  plannedVelocity Float?    @map("planned_velocity")
+  actualVelocity  Float?    @map("actual_velocity")
+  capacity        Float?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workItems WorkItem[]
+
+  @@unique([projectId, number])
+  @@index([tenantId, projectId])
+  @@index([projectId, status])
+  @@map("sprints")
 }
 
 // ── Readiness configurations (tenant-scoped) ──────────────────────────────────
@@ -248,6 +281,7 @@ model Project {
   members   ProjectMembership[]
   workItems WorkItem[]
   releases  Release[]
+  sprints   Sprint[]
 
   @@unique([tenantId, name])
   @@index([tenantId, createdAt(sort: Desc)])
